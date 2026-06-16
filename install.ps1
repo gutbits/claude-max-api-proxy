@@ -8,17 +8,19 @@
     powershell -ExecutionPolicy Bypass -File install.ps1 -StartOnly
     powershell -ExecutionPolicy Bypass -File install.ps1 -LoginOnly
     powershell -ExecutionPolicy Bypass -File install.ps1 -Stop
+    powershell -ExecutionPolicy Bypass -File install.ps1 -RestartAll
 #>
 
 param(
     [switch]$LoginOnly,
     [switch]$StartOnly,
-    [switch]$Stop
+    [switch]$Stop,
+    [switch]$RestartAll
 )
 
 $ErrorActionPreference = "Stop"
 
-$ScriptVersion = "1.0.6"
+$ScriptVersion = "1.0.7"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
@@ -456,6 +458,29 @@ function Start-Proxy {
     Write-Info ("Proxy running - http://127.0.0.1:" + $Port + "/v1")
 }
 
+function Stop-AllHermesGateways {
+    Refresh-Path
+    Write-Info "Killing all Hermes gateway processes..."
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    if (Get-Command hermes -ErrorAction SilentlyContinue) {
+        & hermes gateway stop 2>&1 | Out-Null
+    }
+    Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
+        try {
+            $cmd = (Get-CimInstance Win32_Process -Filter ("ProcessId=" + $_.Id)).CommandLine
+            if ($cmd -and ($cmd -match 'hermes.*gateway|gateway run|hermes_cli\\main\.py')) {
+                Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+                Write-Info ("  killed PID " + $_.Id)
+            }
+        }
+        catch {}
+    }
+    Start-Sleep -Seconds 2
+    $ErrorActionPreference = $prevEap
+    Write-Info "Hermes gateways stopped."
+}
+
 function Restart-Hermes {
     Refresh-Path
     if (-not (Get-Command hermes -ErrorAction SilentlyContinue)) {
@@ -499,8 +524,18 @@ Write-Host ""
 
 Refresh-Path
 
-if ($Stop) { Stop-Proxy; exit 0 }
+if ($Stop) { Stop-AllHermesGateways; Stop-Proxy; exit 0 }
 if ($LoginOnly) { Ensure-Login; exit 0 }
+
+if ($RestartAll) {
+    Stop-AllHermesGateways
+    Stop-Proxy
+    Patch-Hermes
+    Start-Proxy
+    Restart-Hermes
+    Show-Done
+    exit 0
+}
 
 if ($StartOnly) {
     $d = Join-Path (Get-InstallDir) "dist\server\standalone.js"
