@@ -18,7 +18,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ScriptVersion = "1.0.3"
+$ScriptVersion = "1.0.4"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
@@ -27,7 +27,6 @@ $PidFile       = Join-Path $env:USERPROFILE ".claude-max-api-proxy.pid"
 $LogFile       = Join-Path $env:USERPROFILE ".claude-max-api-proxy.log"
 $NpmGlobal     = Join-Path $env:APPDATA "npm"
 $ClaudePkg     = '@anthropic-ai/claude-code'
-$ClaudeExeRel  = 'npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe'
 
 function Write-Info($m)  { Write-Host "> $m" -ForegroundColor Green }
 function Write-Warn($m)  { Write-Host "! $m" -ForegroundColor Yellow }
@@ -50,8 +49,33 @@ function Get-InstallDir {
 function Save-InstallDir($d) { Set-Content $InstallMarker $d -NoNewline }
 
 function Get-ClaudeExe {
-    $p = Join-Path $env:APPDATA $ClaudeExeRel
-    if (Test-Path $p) { return $p }
+    $candidates = @()
+
+    try {
+        $npmRoot = (& npm root -g 2>$null)
+        if ($npmRoot) {
+            $npmRoot = $npmRoot.ToString().Trim()
+            $candidates += (Join-Path $npmRoot '@anthropic-ai\claude-code\bin\claude.exe')
+        }
+    }
+    catch {}
+
+    $candidates += (Join-Path $env:APPDATA 'npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe')
+    if ($env:ProgramFiles) {
+        $candidates += (Join-Path $env:ProgramFiles 'nodejs\node_modules\@anthropic-ai\claude-code\bin\claude.exe')
+    }
+
+    $cmd = Get-Command claude -ErrorAction SilentlyContinue
+    if ($cmd -and $cmd.Source) {
+        $npmBin = Split-Path $cmd.Source -Parent
+        $candidates += (Join-Path $npmBin 'node_modules\@anthropic-ai\claude-code\bin\claude.exe')
+    }
+
+    foreach ($p in $candidates) {
+        if ($p -and (Test-Path -LiteralPath $p)) {
+            return (Resolve-Path -LiteralPath $p).Path
+        }
+    }
     return $null
 }
 
@@ -107,14 +131,23 @@ function Install-Node {
 
 function Install-ClaudeCli {
     Refresh-Path
-    if (Get-ClaudeExe) {
+    $exe = Get-ClaudeExe
+    if ($exe) {
         Write-Info ("Claude CLI OK: " + (claude --version 2>$null))
+        Write-Info ("Claude exe: " + $exe)
         return
     }
     Write-Info "Installing Claude Code CLI..."
     & npm install -g $ClaudePkg
     Refresh-Path
-    if (-not (Get-ClaudeExe)) { Write-Fail "Claude CLI install failed." }
+    Start-Sleep -Seconds 2
+    $exe = Get-ClaudeExe
+    if (-not $exe) {
+        Write-Warn ("npm root -g: " + (npm root -g 2>$null))
+        Write-Warn ("where claude: " + (where.exe claude 2>$null))
+        Write-Fail "Claude CLI install failed. Try manually: npm install -g @anthropic-ai/claude-code"
+    }
+    Write-Info ("Claude exe: " + $exe)
 }
 
 function Install-Proxy {
@@ -307,7 +340,7 @@ function Show-Done {
 }
 
 Write-Host ""
-Write-Host "  Claude Max Proxy - Windows Installer (gutbits)"
+Write-Host ("  Claude Max Proxy - Windows Installer (gutbits v" + $ScriptVersion + ")")
 Write-Host "  ================================================"
 Write-Host ""
 
