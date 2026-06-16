@@ -18,6 +18,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$ScriptVersion = "1.0.3"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
