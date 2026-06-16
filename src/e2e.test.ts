@@ -56,13 +56,16 @@ describe("health and models", () => {
 
     const ids = body.data.map((m: any) => m.id);
     for (const expected of [
-      "claude-opus-4",
+      "claude-opus-4-8",
+      "claude-opus-4-7",
       "claude-opus-4-6",
-      "claude-sonnet-4",
-      "claude-sonnet-4-5",
+      "claude-opus-4",
       "claude-sonnet-4-6",
-      "claude-haiku-4",
+      "claude-sonnet-4-5",
+      "claude-sonnet-4",
       "claude-haiku-4-5",
+      "claude-haiku-4",
+      "claude-fable-5",
     ]) {
       assert.ok(ids.includes(expected), `missing model ${expected}`);
     }

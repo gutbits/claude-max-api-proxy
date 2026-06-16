@@ -12,6 +12,7 @@ import {
   cliResultToOpenai,
   createDoneChunk,
 } from "../adapter/cli-to-openai.js";
+import { displayModelId, getAdvertisedModelIds } from "../models/catalog.js";
 import type { OpenAIChatRequest, OpenAIToolCall } from "../types/openai.js";
 import type { ClaudeCliAssistant, ClaudeCliResult, ClaudeCliStreamEvent } from "../types/claude-cli.js";
 
@@ -103,7 +104,7 @@ async function handleStreamingResponse(
 
   return new Promise<void>((resolve, reject) => {
     let isFirst = true;
-    let lastModel = "claude-sonnet-4";
+    let lastModel = displayModelId(cliInput.model, cliInput.requestedModel);
     let isComplete = false;
     let hasEmittedText = false;
     let toolCallIndex = 0;
@@ -237,14 +238,13 @@ async function handleStreamingResponse(
 
     // Handle final assistant message (for model name)
     subprocess.on("assistant", (message: ClaudeCliAssistant) => {
-      lastModel = message.message.model;
+      lastModel = displayModelId(message.message.model, cliInput.requestedModel);
     });
 
     subprocess.on("result", (result: ClaudeCliResult) => {
       isComplete = true;
       if (!res.writableEnded) {
-        // Send final done chunk with finish_reason and usage data
-        const doneChunk = createDoneChunk(requestId, lastModel);
+        const doneChunk = createDoneChunk(requestId, lastModel, cliInput.requestedModel);
         if (result.usage) {
           doneChunk.usage = {
             prompt_tokens: result.usage.input_tokens || 0,
@@ -346,7 +346,7 @@ async function handleNonStreamingResponse(
 
     subprocess.on("close", (code: number | null) => {
       if (finalResult) {
-        res.json(cliResultToOpenai(finalResult, requestId));
+        res.json(cliResultToOpenai(finalResult, requestId, undefined, cliInput.requestedModel));
       } else if (!res.headersSent) {
         res.status(500).json({
           error: {
@@ -379,21 +379,11 @@ async function handleNonStreamingResponse(
 }
 
 /**
- * Handle GET /v1/models
- *
- * Returns available models
+ * Handle GET /v1/models — returns full model catalog for Hermes / OpenAI clients
  */
 export function handleModels(_req: Request, res: Response): void {
   const now = Math.floor(Date.now() / 1000);
-  const modelIds = [
-    "claude-opus-4",
-    "claude-opus-4-6",
-    "claude-sonnet-4",
-    "claude-sonnet-4-5",
-    "claude-sonnet-4-6",
-    "claude-haiku-4",
-    "claude-haiku-4-5",
-  ];
+  const modelIds = getAdvertisedModelIds();
   res.json({
     object: "list",
     data: modelIds.map((id) => ({
