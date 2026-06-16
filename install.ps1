@@ -18,7 +18,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ScriptVersion = "1.0.5"
+$ScriptVersion = "1.0.6"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
@@ -202,39 +202,130 @@ function Get-HermesPython {
     return $null
 }
 
+function Write-Utf8NoBom($path, $content) {
+    $enc = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($path, $content, $enc)
+}
+
 function Test-HermesConfigValid($cfgPath) {
     $py = Get-HermesPython
-    if ($py) {
-        $check = @'
+    if (-not $py) { return $null }
+    $checkPy = Join-Path $env:TEMP "hermes-yaml-check.py"
+    $checkCode = @'
 import sys
 try:
     import yaml
-    with open(sys.argv[1], encoding='utf-8') as f:
+except ImportError:
+    sys.exit(2)
+try:
+    with open(sys.argv[1], encoding="utf-8-sig") as f:
         yaml.safe_load(f)
     sys.exit(0)
 except Exception:
     sys.exit(1)
 '@
-        & $py -c $check $cfgPath 2>$null
-        return ($LASTEXITCODE -eq 0)
-    }
-    if (Get-Command hermes -ErrorAction SilentlyContinue) {
-        $o = (& hermes gateway status 2>&1 | Out-String)
-        return ($o -notmatch 'Failed to parse')
-    }
-    return $true
+    Set-Content -Path $checkPy -Value $checkCode -Encoding UTF8
+    & $py $checkPy $cfgPath 2>$null
+    if ($LASTEXITCODE -eq 2) { return $null }
+    return ($LASTEXITCODE -eq 0)
 }
 
 function Restore-HermesBackup($cfgPath) {
-    $bak = Get-ChildItem -Path ($cfgPath + ".bak.*") -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending |
-        Select-Object -First 1
-    if ($bak) {
-        Write-Warn ("Restoring Hermes config from " + $bak.Name)
+    $baks = Get-ChildItem -Path ($cfgPath + ".bak.*") -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending
+    foreach ($bak in $baks) {
         Copy-Item $bak.FullName $cfgPath -Force
-        return $true
+        $valid = Test-HermesConfigValid $cfgPath
+        if ($valid -ne $false) {
+            Write-Warn ("Restored Hermes config from " + $bak.Name)
+            return $true
+        }
     }
     return $false
+}
+
+function Invoke-HermesYamlPatch {
+    param([string]$CfgPath, [string]$Url, [string]$Py)
+    $patchPy = Join-Path $env:TEMP "hermes-yaml-patch.py"
+    $patchCode = @'
+import sys
+import yaml
+
+path = sys.argv[1]
+url = sys.argv[2]
+
+with open(path, encoding="utf-8-sig") as f:
+    data = yaml.safe_load(f)
+if data is None:
+    data = {}
+
+model = data.setdefault("model", {})
+model["provider"] = "custom"
+model["base_url"] = url
+model["default"] = "claude-sonnet-4"
+model["api_key"] = "not-needed"
+
+cps = data.get("custom_providers")
+if not isinstance(cps, list):
+    cps = []
+if not any(isinstance(c, dict) and c.get("name") == "claude-max-proxy" for c in cps):
+    cps.append({"name": "claude-max-proxy", "base_url": url})
+data["custom_providers"] = cps
+
+with open(path, "w", encoding="utf-8", newline="\n") as f:
+    yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False, width=4096)
+'@
+    Set-Content -Path $patchPy -Value $patchCode -Encoding UTF8
+    & $Py $patchPy $CfgPath $Url
+    return ($LASTEXITCODE -eq 0)
+}
+
+function Patch-Hermes-LineFallback {
+    param([string]$CfgPath, [string]$Url)
+    $lines = Get-Content $CfgPath
+    $out = New-Object System.Collections.ArrayList
+    $inModel = $false
+    $ind = "  "
+    $seenProvider = $false
+    $seenBaseUrl = $false
+    $seenDefault = $false
+    $seenApiKey = $false
+    $hasCustomProviders = ($lines -join "`n") -match '(?m)^custom_providers:'
+
+    foreach ($line in $lines) {
+        if ($line -match '^model:\s*$') {
+            [void]$out.Add($line)
+            $inModel = $true
+            continue
+        }
+        if ($inModel -and ($line -match '^[^\s#]')) {
+            if (-not $seenProvider) { [void]$out.Add($ind + "provider: custom") }
+            if (-not $seenBaseUrl) { [void]$out.Add($ind + "base_url: " + $Url) }
+            if (-not $seenDefault) { [void]$out.Add($ind + "default: claude-sonnet-4") }
+            if (-not $seenApiKey) { [void]$out.Add($ind + "api_key: not-needed") }
+            $inModel = $false
+        }
+        if ($inModel) {
+            if ($line -match '^\s+provider:') { [void]$out.Add($ind + "provider: custom"); $seenProvider = $true; continue }
+            if ($line -match '^\s+base_url:') { [void]$out.Add($ind + "base_url: " + $Url); $seenBaseUrl = $true; continue }
+            if ($line -match '^\s+default:') { [void]$out.Add($ind + "default: claude-sonnet-4"); $seenDefault = $true; continue }
+            if ($line -match '^\s+api_key:') { [void]$out.Add($ind + "api_key: not-needed"); $seenApiKey = $true; continue }
+        }
+        [void]$out.Add($line)
+    }
+    if ($inModel) {
+        if (-not $seenProvider) { [void]$out.Add($ind + "provider: custom") }
+        if (-not $seenBaseUrl) { [void]$out.Add($ind + "base_url: " + $Url) }
+        if (-not $seenDefault) { [void]$out.Add($ind + "default: claude-sonnet-4") }
+        if (-not $seenApiKey) { [void]$out.Add($ind + "api_key: not-needed") }
+    }
+    if (-not $hasCustomProviders) {
+        [void]$out.Add("")
+        [void]$out.Add("custom_providers:")
+        [void]$out.Add("  - name: claude-max-proxy")
+        [void]$out.Add("    base_url: " + $Url)
+    }
+    Write-Utf8NoBom $CfgPath ($out -join "`n")
 }
 
 function Patch-Hermes {
@@ -244,80 +335,48 @@ function Patch-Hermes {
         return
     }
 
-    if (-not (Test-HermesConfigValid $cfg)) {
-        Write-Warn "Hermes config.yaml is broken - restoring latest backup..."
+    Write-Info ("Patching " + $cfg + " ...")
+
+    if ((Test-HermesConfigValid $cfg) -eq $false) {
+        Write-Warn "Hermes config.yaml is broken - restoring backup..."
         if (-not (Restore-HermesBackup $cfg)) {
-            Write-Fail "Broken config and no backup found. Fix config.yaml manually."
+            Write-Fail "Broken config and no good backup found."
         }
     }
 
     $backup = $cfg + ".bak." + (Get-Date -Format "yyyyMMdd-HHmmss")
     Copy-Item $cfg $backup
     $url = "http://localhost:" + $Port + "/v1"
-    $lines = Get-Content $cfg
-    $out = New-Object System.Collections.ArrayList
-    $inModel = $false
-    $ind = "  "
-    $seenProvider = $false
-    $seenBaseUrl = $false
-    $seenDefault = $false
-    $seenApiKey = $false
-    $textAll = $lines -join "`n"
-    $hasCustomProviders = $textAll -match '(?m)^custom_providers:'
+    $py = Get-HermesPython
+    $patched = $false
 
-    foreach ($line in $lines) {
-        if ($line -match '^model:\s*$') {
-            [void]$out.Add($line)
-            $inModel = $true
-            continue
+    if ($py) {
+        Write-Info "Patching via Python yaml..."
+        if (Invoke-HermesYamlPatch -CfgPath $cfg -Url $url -Py $py) {
+            $patched = $true
         }
-
-        if ($inModel -and ($line -match '^[^\s#]')) {
-            if (-not $seenProvider) { [void]$out.Add($ind + "provider: custom") }
-            if (-not $seenBaseUrl) { [void]$out.Add($ind + "base_url: " + $url) }
-            if (-not $seenDefault) { [void]$out.Add($ind + "default: claude-sonnet-4") }
-            if (-not $seenApiKey) { [void]$out.Add($ind + "api_key: not-needed") }
-            $inModel = $false
+        else {
+            Write-Warn "Python yaml patch failed - trying line fallback..."
         }
-
-        if ($inModel) {
-            if ($line -match '^\s+provider:') {
-                [void]$out.Add($ind + "provider: custom"); $seenProvider = $true; continue
-            }
-            if ($line -match '^\s+base_url:') {
-                [void]$out.Add($ind + "base_url: " + $url); $seenBaseUrl = $true; continue
-            }
-            if ($line -match '^\s+default:') {
-                [void]$out.Add($ind + "default: claude-sonnet-4"); $seenDefault = $true; continue
-            }
-            if ($line -match '^\s+api_key:') {
-                [void]$out.Add($ind + "api_key: not-needed"); $seenApiKey = $true; continue
-            }
-        }
-
-        [void]$out.Add($line)
     }
 
-    if ($inModel) {
-        if (-not $seenProvider) { [void]$out.Add($ind + "provider: custom") }
-        if (-not $seenBaseUrl) { [void]$out.Add($ind + "base_url: " + $url) }
-        if (-not $seenDefault) { [void]$out.Add($ind + "default: claude-sonnet-4") }
-        if (-not $seenApiKey) { [void]$out.Add($ind + "api_key: not-needed") }
+    if (-not $patched) {
+        Copy-Item $backup $cfg -Force
+        Patch-Hermes-LineFallback -CfgPath $cfg -Url $url
+        $patched = $true
     }
 
-    if (-not $hasCustomProviders) {
-        [void]$out.Add("")
-        [void]$out.Add("custom_providers:")
-        [void]$out.Add("  - name: claude-max-proxy")
-        [void]$out.Add("    base_url: " + $url)
-    }
-
-    Set-Content -Path $cfg -Value ($out -join "`n") -Encoding UTF8
-
-    if (-not (Test-HermesConfigValid $cfg)) {
+    $valid = Test-HermesConfigValid $cfg
+    if ($valid -eq $false) {
         Write-Warn "Patch produced invalid YAML - rolling back..."
         Copy-Item $backup $cfg -Force
-        Write-Fail ("Could not patch Hermes config safely. Set manually under model: only - provider: custom, base_url: " + $url)
+        Write-Warn "Set these under model: in config.yaml manually:"
+        Write-Host "  provider: custom"
+        Write-Host ("  base_url: " + $url)
+        Write-Host "  default: claude-sonnet-4"
+        Write-Host "  api_key: not-needed"
+        Write-Warn "Proxy is still running - Hermes config needs manual fix."
+        return
     }
 
     Write-Info ("  Hermes -> custom at " + $url)
