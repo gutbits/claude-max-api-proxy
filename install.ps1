@@ -18,7 +18,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ScriptVersion = "1.0.4"
+$ScriptVersion = "1.0.5"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
@@ -195,6 +195,48 @@ function Ensure-Login {
     & claude auth login
 }
 
+function Get-HermesPython {
+    $p = Join-Path $env:LOCALAPPDATA "hermes\hermes-agent\venv\Scripts\python.exe"
+    if (Test-Path $p) { return $p }
+    if (Get-Command python -ErrorAction SilentlyContinue) { return "python" }
+    return $null
+}
+
+function Test-HermesConfigValid($cfgPath) {
+    $py = Get-HermesPython
+    if ($py) {
+        $check = @'
+import sys
+try:
+    import yaml
+    with open(sys.argv[1], encoding='utf-8') as f:
+        yaml.safe_load(f)
+    sys.exit(0)
+except Exception:
+    sys.exit(1)
+'@
+        & $py -c $check $cfgPath 2>$null
+        return ($LASTEXITCODE -eq 0)
+    }
+    if (Get-Command hermes -ErrorAction SilentlyContinue) {
+        $o = (& hermes gateway status 2>&1 | Out-String)
+        return ($o -notmatch 'Failed to parse')
+    }
+    return $true
+}
+
+function Restore-HermesBackup($cfgPath) {
+    $bak = Get-ChildItem -Path ($cfgPath + ".bak.*") -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+    if ($bak) {
+        Write-Warn ("Restoring Hermes config from " + $bak.Name)
+        Copy-Item $bak.FullName $cfgPath -Force
+        return $true
+    }
+    return $false
+}
+
 function Patch-Hermes {
     $cfg = Get-HermesConfig
     if (-not $cfg) {
@@ -202,33 +244,82 @@ function Patch-Hermes {
         return
     }
 
-    Write-Info ("Patching " + $cfg + " ...")
-    Copy-Item $cfg ($cfg + ".bak." + (Get-Date -Format "yyyyMMdd-HHmmss"))
+    if (-not (Test-HermesConfigValid $cfg)) {
+        Write-Warn "Hermes config.yaml is broken - restoring latest backup..."
+        if (-not (Restore-HermesBackup $cfg)) {
+            Write-Fail "Broken config and no backup found. Fix config.yaml manually."
+        }
+    }
+
+    $backup = $cfg + ".bak." + (Get-Date -Format "yyyyMMdd-HHmmss")
+    Copy-Item $cfg $backup
     $url = "http://localhost:" + $Port + "/v1"
-    $t = Get-Content $cfg -Raw
+    $lines = Get-Content $cfg
+    $out = New-Object System.Collections.ArrayList
+    $inModel = $false
+    $ind = "  "
+    $seenProvider = $false
+    $seenBaseUrl = $false
+    $seenDefault = $false
+    $seenApiKey = $false
+    $textAll = $lines -join "`n"
+    $hasCustomProviders = $textAll -match '(?m)^custom_providers:'
 
-    $t = [regex]::Replace($t, '(?m)^(\s*provider:\s*).*$', '${1}custom', 1)
-    $t = [regex]::Replace($t, '(?m)^(\s*base_url:\s*).*$', '${1}' + $url, 1)
-    $t = [regex]::Replace($t, '(?m)^(\s*default:\s*).*$', '${1}claude-sonnet-4', 1)
-
-    $parts = $t -split 'model:', 2
-    if ($parts.Count -gt 1) {
-        $block = ($parts[1] -split "`n`n", 2)[0]
-        if ($block -notmatch 'api_key:') {
-            $t = [regex]::Replace($t, '(?m)^(\s*base_url:\s*.*)$', '${1}' + "`n  api_key: not-needed", 1)
+    foreach ($line in $lines) {
+        if ($line -match '^model:\s*$') {
+            [void]$out.Add($line)
+            $inModel = $true
+            continue
         }
+
+        if ($inModel -and ($line -match '^[^\s#]')) {
+            if (-not $seenProvider) { [void]$out.Add($ind + "provider: custom") }
+            if (-not $seenBaseUrl) { [void]$out.Add($ind + "base_url: " + $url) }
+            if (-not $seenDefault) { [void]$out.Add($ind + "default: claude-sonnet-4") }
+            if (-not $seenApiKey) { [void]$out.Add($ind + "api_key: not-needed") }
+            $inModel = $false
+        }
+
+        if ($inModel) {
+            if ($line -match '^\s+provider:') {
+                [void]$out.Add($ind + "provider: custom"); $seenProvider = $true; continue
+            }
+            if ($line -match '^\s+base_url:') {
+                [void]$out.Add($ind + "base_url: " + $url); $seenBaseUrl = $true; continue
+            }
+            if ($line -match '^\s+default:') {
+                [void]$out.Add($ind + "default: claude-sonnet-4"); $seenDefault = $true; continue
+            }
+            if ($line -match '^\s+api_key:') {
+                [void]$out.Add($ind + "api_key: not-needed"); $seenApiKey = $true; continue
+            }
+        }
+
+        [void]$out.Add($line)
     }
 
-    if ($t -notmatch 'custom_providers:') {
-        $snip = "`ncustom_providers:`n  - name: claude-max-proxy`n    base_url: " + $url + "`n"
-        $evaluator = {
-            param($m)
-            return $m.Groups[1].Value + $snip
-        }
-        $t = [regex]::Replace($t, '(?m)(^model:\r?\n(?:  .+\r?\n)+)', $evaluator)
+    if ($inModel) {
+        if (-not $seenProvider) { [void]$out.Add($ind + "provider: custom") }
+        if (-not $seenBaseUrl) { [void]$out.Add($ind + "base_url: " + $url) }
+        if (-not $seenDefault) { [void]$out.Add($ind + "default: claude-sonnet-4") }
+        if (-not $seenApiKey) { [void]$out.Add($ind + "api_key: not-needed") }
     }
 
-    Set-Content $cfg $t -NoNewline
+    if (-not $hasCustomProviders) {
+        [void]$out.Add("")
+        [void]$out.Add("custom_providers:")
+        [void]$out.Add("  - name: claude-max-proxy")
+        [void]$out.Add("    base_url: " + $url)
+    }
+
+    Set-Content -Path $cfg -Value ($out -join "`n") -Encoding UTF8
+
+    if (-not (Test-HermesConfigValid $cfg)) {
+        Write-Warn "Patch produced invalid YAML - rolling back..."
+        Copy-Item $backup $cfg -Force
+        Write-Fail ("Could not patch Hermes config safely. Set manually under model: only - provider: custom, base_url: " + $url)
+    }
+
     Write-Info ("  Hermes -> custom at " + $url)
 }
 
@@ -313,7 +404,9 @@ function Restart-Hermes {
         return
     }
     Write-Info "Restarting Hermes gateway..."
-    & hermes gateway stop 2>$null | Out-Null
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try { & hermes gateway stop 2>&1 | Out-Null } catch {}
     Start-Sleep -Seconds 2
     $gwLog = Join-Path $env:LOCALAPPDATA "hermes\gateway.log"
     if (-not (Test-Path (Split-Path $gwLog))) {
@@ -323,6 +416,7 @@ function Restart-Hermes {
     Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", $gwCmd) -WindowStyle Hidden
     Start-Sleep -Seconds 2
     & hermes gateway status 2>&1
+    $ErrorActionPreference = $prevEap
 }
 
 function Show-Done {
