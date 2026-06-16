@@ -24,10 +24,8 @@ import {
   isInputJsonDelta,
   isContentBlockStop,
 } from "../types/claude-cli.js";
-import type { ClaudeModel } from "../adapter/openai-to-cli.js";
-
 export interface SubprocessOptions {
-  model: ClaudeModel;
+  model: string;
   sessionId?: string;
   cwd?: string;
   timeout?: number;
