@@ -4,22 +4,31 @@ Use your **Claude Max** subscription with **Hermes** via an OpenAI-compatible lo
 
 Fork of [wende/claude-max-api-proxy](https://github.com/wende/claude-max-api-proxy) with Windows installer scripts.
 
-## Quick start (Windows Server / Windows 10+)
+## One-liner (Windows VPS / Server)
 
-**One file — download and run:**
+Copy **only the command** — not the `PS C:\...>` prompt.
+
+**Fresh install** (download, setup, start proxy + Hermes gateway):
 
 ```powershell
-# Option A: save install.ps1 and run
-powershell -ExecutionPolicy Bypass -File install.ps1
-
-# Option B: one-liner (after repo is live)
-irm https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/main/install.ps1 -OutFile install.ps1
-powershell -ExecutionPolicy Bypass -File install.ps1
+Remove-Item $env:USERPROFILE\install.ps1 -Force -EA 0; iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/main/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1
 ```
 
-Or double-click **`install.bat`**.
+**Already installed — restart everything** (kill gateways + proxy, repatch Hermes, start fresh):
 
-### What it does
+```powershell
+powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll
+```
+
+**Update code + rebuild + restart** (pull latest models, fix gutbits remote):
+
+```powershell
+iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/main/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; $d="$env:USERPROFILE\claude-max-api-proxy"; git -C $d remote set-url origin https://github.com/gutbits/claude-max-api-proxy.git 2>$null; git -C $d fetch origin; git -C $d reset --hard origin/main; npm --prefix $d install --loglevel error; npm --prefix $d run build; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll; (Invoke-RestMethod http://127.0.0.1:3456/v1/models).data.id
+```
+
+Or double-click **`install.bat`** if you already cloned the repo.
+
+### What the installer does
 
 1. Installs Node.js 20+ (via winget if needed)
 2. Installs `@anthropic-ai/claude-code` globally
@@ -34,9 +43,20 @@ Or double-click **`install.bat`**.
 
 ```powershell
 .\install.ps1 -StartOnly   # start proxy (already set up)
-.\install.ps1 -LoginOnly   # re-auth Claude CLI
-.\install.ps1 -Stop         # stop proxy
+.\install.ps1 -LoginOnly     # re-auth Claude CLI
+.\install.ps1 -Stop          # stop proxy + gateways
+.\install.ps1 -RestartAll    # kill all, rebuild services, restart
 ```
+
+## Hermes model switch
+
+```
+/model custom:claude-max-proxy:claude-opus-4-8
+/model custom:claude-max-proxy:claude-sonnet-4-6
+/model custom:claude-max-proxy:claude-fable-5
+```
+
+Use **dashes** not dots (`4-8` not `4.8`).
 
 ## Requirements
 
@@ -44,13 +64,6 @@ Or double-click **`install.bat`**.
 - Git — https://git-scm.com/download/win
 - Hermes Agent installed
 - Claude Max subscription
-
-## Hermes model switch
-
-```
-/model custom:claude-max-proxy:claude-opus-4
-/model custom:claude-max-proxy:claude-sonnet-4
-```
 
 ## Linux VPS
 

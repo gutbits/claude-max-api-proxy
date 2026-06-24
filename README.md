@@ -16,6 +16,20 @@ This proxy wraps the Claude Code CLI as a subprocess and exposes an OpenAI-compa
 
 Anthropic blocks OAuth tokens from being used directly with third-party API clients. However, the Claude Code CLI *can* use OAuth tokens. This proxy bridges that gap by wrapping the CLI and exposing a standard API.
 
+## Windows + Hermes (one-liner)
+
+See **[README-WINDOWS.md](README-WINDOWS.md)** for full Windows/VPS instructions. Quick copy-paste:
+
+```powershell
+Remove-Item $env:USERPROFILE\install.ps1 -Force -EA 0; iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/main/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1
+```
+
+Restart proxy + Hermes gateway after setup:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll
+```
+
 ## How It Works
 
 ```
