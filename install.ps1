@@ -9,6 +9,12 @@
     powershell -ExecutionPolicy Bypass -File install.ps1 -LoginOnly
     powershell -ExecutionPolicy Bypass -File install.ps1 -Stop
     powershell -ExecutionPolicy Bypass -File install.ps1 -RestartAll
+
+  One-liner (Windows VPS):
+    Remove-Item $env:USERPROFILE\install.ps1 -Force -EA 0; iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/main/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1
+
+  Restart all (proxy + Hermes gateways):
+    powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll
 #>
 
 param(
