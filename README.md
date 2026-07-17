@@ -1,20 +1,18 @@
 # Claude Max API Proxy
 
-> Actively maintained fork of [atalovesyou/claude-max-api-proxy](https://github.com/atalovesyou/claude-max-api-proxy) with OpenClaw integration, improved streaming, and expanded model support.
+**Use your Claude Max subscription with any OpenAI-compatible client — no separate API costs.**
 
-**Use your Claude Max subscription ($200/month) with any OpenAI-compatible client — no separate API costs!**
-
-This proxy wraps the Claude Code CLI as a subprocess and exposes an OpenAI-compatible HTTP API, allowing tools like OpenClaw, Continue.dev, or any OpenAI-compatible client to use your Claude Max subscription instead of paying per-API-call.
+Wraps the Claude Code CLI as a subprocess and exposes an OpenAI-compatible HTTP API so tools like Hermes, Continue.dev, or any OpenAI client can use your Claude Max subscription instead of pay-per-token API billing.
 
 ## Why This Exists
 
 | Approach | Cost | Limitation |
 |----------|------|------------|
 | Claude API | ~$15/M input, ~$75/M output tokens | Pay per use |
-| Claude Max | $200/month flat | OAuth blocked for third-party API use |
+| Claude Max | Flat monthly | OAuth blocked for third-party API use |
 | **This Proxy** | $0 extra (uses Max subscription) | Routes through CLI |
 
-Anthropic blocks OAuth tokens from being used directly with third-party API clients. However, the Claude Code CLI *can* use OAuth tokens. This proxy bridges that gap by wrapping the CLI and exposing a standard API.
+Anthropic blocks OAuth tokens from third-party API clients. The Claude Code CLI can use OAuth. This proxy bridges that gap.
 
 ## Windows + Hermes (one-liner)
 
@@ -33,7 +31,7 @@ powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAl
 ## How It Works
 
 ```
-Your App (OpenClaw, Continue.dev, etc.)
+Your App (Hermes, Continue.dev, etc.)
          ↓
     HTTP Request (OpenAI format)
          ↓
@@ -52,25 +50,16 @@ Your App (OpenClaw, Continue.dev, etc.)
 
 - **OpenAI-compatible API** — Works with any client that supports OpenAI's API format
 - **Streaming support** — Real-time token streaming via Server-Sent Events
-- **Multiple models** — Claude Opus, Sonnet, and Haiku with flexible model aliases
-- **OpenClaw integration** — Automatic tool name mapping and system prompt adaptation
+- **Multiple models** — Fable 5, Opus 4.8, Sonnet 5, Haiku 4.5 + aliases
+- **Hermes-ready** — One-click Windows installer patches Hermes config
 - **Content block handling** — Proper text block separators for multi-block responses
 - **Session management** — Maintains conversation context via session IDs
-- **Auto-start service** — Optional LaunchAgent for macOS
 - **Zero configuration** — Uses existing Claude CLI authentication
 - **Secure by design** — Uses `spawn()` to prevent shell injection
 
-## What's Different from the Original
-
-- **OpenClaw tool mapping** — Maps OpenClaw tool names (`exec`, `read`, `web_search`, etc.) to Claude Code equivalents (`Bash`, `Read`, `WebSearch`)
-- **System prompt stripping** — Removes OpenClaw-specific tooling sections that confuse the CLI
-- **Content block support** — Handles `input_text` content blocks and multi-block text separators
-- **Tool call types** — Full OpenAI tool call type definitions for streaming and non-streaming
-- **Improved streaming** — Better SSE handling with connection confirmation and client disconnect detection
-
 ## Prerequisites
 
-1. **Claude Max subscription** ($200/month) — [Subscribe here](https://claude.ai)
+1. **Claude Max subscription** — [Subscribe here](https://claude.ai)
 2. **Claude Code CLI** installed and authenticated:
    ```bash
    npm install -g @anthropic-ai/claude-code
@@ -81,7 +70,7 @@ Your App (OpenClaw, Continue.dev, etc.)
 
 ```bash
 # Clone the repository
-git clone https://github.com/wende/claude-max-api-proxy.git
+git clone https://github.com/gutbits/claude-max-api-proxy.git
 cd claude-max-api-proxy
 
 # Install dependencies
@@ -156,9 +145,25 @@ Also advertised: `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-5`, `cla
 
 ## Configuration with Popular Tools
 
-### OpenClaw
+### Hermes
 
-OpenClaw works with this proxy out of the box. The proxy automatically maps OpenClaw tool names to Claude Code equivalents and strips conflicting tooling sections from system prompts.
+Use the Windows one-liner above, or set in Hermes config:
+
+```yaml
+model:
+  provider: custom
+  base_url: http://localhost:3456/v1
+  default: claude-sonnet-5
+  api_key: not-needed
+```
+
+Then switch models in chat:
+
+```
+/model custom:claude-max-proxy:claude-sonnet-5
+/model custom:claude-max-proxy:claude-fable-5
+/model custom:claude-max-proxy:claude-opus-4-8
+```
 
 ### Continue.dev
 
@@ -223,7 +228,7 @@ src/
 │   ├── openai-to-cli.ts   # Convert OpenAI requests → CLI format
 │   └── cli-to-openai.ts   # Convert CLI responses → OpenAI format
 ├── subprocess/
-│   └── manager.ts         # Claude CLI subprocess + OpenClaw tool mapping
+│   └── manager.ts         # Claude CLI subprocess manager
 ├── session/
 │   └── manager.ts         # Session ID mapping
 ├── server/
@@ -264,16 +269,6 @@ Check that the Claude CLI is in your PATH:
 which claude
 ```
 
-## Contributing
-
-Contributions welcome! Please submit PRs with tests.
-
 ## License
 
 MIT
-
-## Acknowledgments
-
-- Originally created by [atalovesyou](https://github.com/atalovesyou/claude-max-api-proxy)
-- Built for use with [OpenClaw](https://openclaw.com)
-- Powered by [Claude Code CLI](https://github.com/anthropics/claude-code)

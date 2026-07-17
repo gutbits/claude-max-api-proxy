@@ -2,8 +2,6 @@
 
 Use your **Claude Max** subscription with **Hermes** via an OpenAI-compatible local proxy.
 
-Fork of [wende/claude-max-api-proxy](https://github.com/wende/claude-max-api-proxy) with Windows installer scripts.
-
 ## One-liner (Windows VPS / Server)
 
 Copy **only the command** — not the `PS C:\...>` prompt.

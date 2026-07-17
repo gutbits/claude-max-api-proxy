@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/wende/claude-max-api-proxy.git"
+REPO_URL="https://github.com/gutbits/claude-max-api-proxy.git"
 INSTALL_DIR="${CLAUDE_MAX_PROXY_DIR:-$HOME/claude-max-api-proxy}"
 PORT="${CLAUDE_MAX_PROXY_PORT:-3456}"
 PID_FILE="$HOME/.claude-max-api-proxy.pid"
