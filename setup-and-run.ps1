@@ -11,7 +11,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$RepoUrl     = "https://github.com/wende/claude-max-api-proxy.git"
+$RepoUrl     = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir  = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
 $Port        = if ($env:CLAUDE_MAX_PROXY_PORT) { [int]$env:CLAUDE_MAX_PROXY_PORT } else { 3456 }

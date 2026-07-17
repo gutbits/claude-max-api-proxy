@@ -37,10 +37,9 @@ bash ~/vps-setup-and-run.sh
 
 **Option B — clone repo on VPS:**
 ```bash
-git clone https://github.com/wende/claude-max-api-proxy.git ~/claude-max-api-proxy
+git clone https://github.com/gutbits/claude-max-api-proxy.git ~/claude-max-api-proxy
 cd ~/claude-max-api-proxy
 bash vps-setup-and-run.sh
-# (copy vps-setup-and-run.sh into the repo first if using upstream — or use Option A)
 ```
 
 ## What it does
