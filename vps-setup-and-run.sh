@@ -117,7 +117,7 @@ text = pathlib.Path(path).read_text()
 # model block: set provider, base_url, default
 text = re.sub(r"(?m)^(\s*provider:\s*).*$", rf"\1custom", text, count=1)
 text = re.sub(r"(?m)^(\s*base_url:\s*).*$", rf"\1{base_url}", text, count=1)
-text = re.sub(r"(?m)^(\s*default:\s*).*$", r"\1claude-sonnet-4", text, count=1)
+text = re.sub(r"(?m)^(\s*default:\s*).*$", r"\1claude-sonnet-5", text, count=1)
 
 # ensure api_key line exists under model (optional for local)
 if "api_key:" not in text.split("model:")[1].split("\n\n")[0]:
@@ -137,7 +137,7 @@ if "custom_providers:" not in text:
     )
 
 pathlib.Path(path).write_text(text)
-print(f"  → provider: custom, base_url: {base_url}, model: claude-sonnet-4")
+print(f"  → provider: custom, base_url: {base_url}, model: claude-sonnet-5")
 PY
 }
 
@@ -179,7 +179,7 @@ print_done() {
   echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
   echo ""
   echo "  Proxy:    http://127.0.0.1:${PORT}/v1"
-  echo "  Models:   claude-sonnet-4, claude-opus-4, claude-haiku-4"
+  echo "  Models:   claude-sonnet-5, claude-fable-5, claude-opus-4-8"
   echo "  Log:      $LOG_FILE"
   echo "  Stop:     bash $(basename "$0" | sed 's/setup-and-run/stop/')  (or kill \$(cat $PID_FILE))"
   echo ""

@@ -120,7 +120,7 @@ curl http://localhost:3456/v1/models
 curl -X POST http://localhost:3456/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-sonnet-4",
+    "model": "claude-sonnet-5",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 
@@ -128,7 +128,7 @@ curl -X POST http://localhost:3456/v1/chat/completions \
 curl -N -X POST http://localhost:3456/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-sonnet-4",
+    "model": "claude-sonnet-5",
     "messages": [{"role": "user", "content": "Hello!"}],
     "stream": true
   }'
@@ -144,13 +144,15 @@ curl -N -X POST http://localhost:3456/v1/chat/completions \
 
 ## Available Models
 
-| Model ID | Alias | CLI Model |
-|----------|-------|-----------|
-| `claude-opus-4` | `opus` | Claude Opus |
-| `claude-sonnet-4` | `sonnet` | Claude Sonnet |
-| `claude-haiku-4` | `haiku` | Claude Haiku |
+| Model ID | Alias | Notes |
+|----------|-------|-------|
+| `claude-fable-5` | `fable` | Fable 5 — frontier agentic |
+| `claude-opus-4-8` | `opus` | Opus 4.8 |
+| `claude-sonnet-5` | `sonnet` | Sonnet 5 (default) |
+| `claude-sonnet-4-6` | — | Sonnet 4.6 |
+| `claude-haiku-4-5` | `haiku` | Haiku 4.5 |
 
-All model IDs also accept a `claude-code-cli/` prefix (e.g., `claude-code-cli/claude-opus-4`). Unknown models default to Opus.
+Also advertised: `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-5`, `claude-sonnet-4`, plus `-max` aliases. Unknown models default to Opus.
 
 ## Configuration with Popular Tools
 
@@ -167,7 +169,7 @@ Add to your Continue config:
   "models": [{
     "title": "Claude (Max)",
     "provider": "openai",
-    "model": "claude-sonnet-4",
+    "model": "claude-sonnet-5",
     "apiBase": "http://localhost:3456/v1",
     "apiKey": "not-needed"
   }]
@@ -185,7 +187,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="claude-sonnet-4",
+    model="claude-sonnet-5",
     messages=[{"role": "user", "content": "Hello!"}]
 )
 ```
