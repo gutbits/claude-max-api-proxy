@@ -18,10 +18,11 @@ export const ADVERTISED_MODELS: ModelEntry[] = [
   { id: "opus", cliModel: "opus", name: "Opus alias", family: "opus" },
   { id: "opus-max", cliModel: "opus", name: "Opus Max alias", family: "opus" },
   // Sonnet
+  { id: "claude-sonnet-5", cliModel: "claude-sonnet-5", name: "Claude Sonnet 5", family: "sonnet" },
   { id: "claude-sonnet-4-6", cliModel: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", family: "sonnet" },
   { id: "claude-sonnet-4-5", cliModel: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", family: "sonnet" },
-  { id: "claude-sonnet-4", cliModel: "sonnet", name: "Claude Sonnet (latest alias)", family: "sonnet" },
-  { id: "sonnet", cliModel: "sonnet", name: "Sonnet alias", family: "sonnet" },
+  { id: "claude-sonnet-4", cliModel: "claude-sonnet-4", name: "Claude Sonnet 4 (legacy)", family: "sonnet" },
+  { id: "sonnet", cliModel: "sonnet", name: "Sonnet alias (latest)", family: "sonnet" },
   { id: "sonnet-max", cliModel: "sonnet", name: "Sonnet Max alias", family: "sonnet" },
   // Haiku
   { id: "claude-haiku-4-5", cliModel: "claude-haiku-4-5", name: "Claude Haiku 4.5", family: "haiku" },
@@ -30,6 +31,7 @@ export const ADVERTISED_MODELS: ModelEntry[] = [
   // Fable
   { id: "claude-fable-5", cliModel: "claude-fable-5", name: "Claude Fable 5", family: "fable" },
   { id: "fable", cliModel: "fable", name: "Fable alias", family: "fable" },
+  { id: "fable-max", cliModel: "fable", name: "Fable Max alias", family: "fable" },
 ];
 
 const MODEL_BY_ID = new Map(ADVERTISED_MODELS.map((m) => [m.id, m]));
@@ -76,7 +78,7 @@ export function displayModelId(cliModel: string | undefined, requestedModel?: st
     if (MODEL_BY_ID.has(reqId)) return reqId;
     if (/^claude-[a-z0-9-]+$/i.test(reqId)) return reqId;
   }
-  if (!cliModel) return "claude-sonnet-4-6";
+  if (!cliModel) return "claude-sonnet-5";
 
   const raw = cliModel.toLowerCase().replace(/-20\d{6}$/, "");
   const normalized = normalizeModelId(raw);
@@ -94,14 +96,15 @@ export function displayModelId(cliModel: string | undefined, requestedModel?: st
   if (raw.includes("opus-4-7")) return "claude-opus-4-7";
   if (raw.includes("opus-4-6")) return "claude-opus-4-6";
   if (raw.includes("opus")) return "claude-opus-4";
+  if (raw.includes("sonnet-5") || raw.includes("sonnet-5.")) return "claude-sonnet-5";
   if (raw.includes("sonnet-4-6")) return "claude-sonnet-4-6";
   if (raw.includes("sonnet-4-5")) return "claude-sonnet-4-5";
-  if (raw.includes("sonnet")) return "claude-sonnet-4";
+  if (raw.includes("sonnet")) return "claude-sonnet-5";
   if (raw.includes("haiku-4-5")) return "claude-haiku-4-5";
   if (raw.includes("haiku")) return "claude-haiku-4";
   if (raw.includes("fable")) return "claude-fable-5";
 
-  return normalized || "claude-sonnet-4-6";
+  return normalized || "claude-sonnet-5";
 }
 
 export function getAdvertisedModelIds(): string[] {

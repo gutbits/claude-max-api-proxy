@@ -26,7 +26,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ScriptVersion = "1.0.7"
+$ScriptVersion = "1.0.8"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
@@ -270,7 +270,7 @@ if data is None:
 model = data.setdefault("model", {})
 model["provider"] = "custom"
 model["base_url"] = url
-model["default"] = "claude-sonnet-4"
+model["default"] = "claude-sonnet-5"
 model["api_key"] = "not-needed"
 
 cps = data.get("custom_providers")
@@ -309,14 +309,14 @@ function Patch-Hermes-LineFallback {
         if ($inModel -and ($line -match '^[^\s#]')) {
             if (-not $seenProvider) { [void]$out.Add($ind + "provider: custom") }
             if (-not $seenBaseUrl) { [void]$out.Add($ind + "base_url: " + $Url) }
-            if (-not $seenDefault) { [void]$out.Add($ind + "default: claude-sonnet-4") }
+            if (-not $seenDefault) { [void]$out.Add($ind + "default: claude-sonnet-5") }
             if (-not $seenApiKey) { [void]$out.Add($ind + "api_key: not-needed") }
             $inModel = $false
         }
         if ($inModel) {
             if ($line -match '^\s+provider:') { [void]$out.Add($ind + "provider: custom"); $seenProvider = $true; continue }
             if ($line -match '^\s+base_url:') { [void]$out.Add($ind + "base_url: " + $Url); $seenBaseUrl = $true; continue }
-            if ($line -match '^\s+default:') { [void]$out.Add($ind + "default: claude-sonnet-4"); $seenDefault = $true; continue }
+            if ($line -match '^\s+default:') { [void]$out.Add($ind + "default: claude-sonnet-5"); $seenDefault = $true; continue }
             if ($line -match '^\s+api_key:') { [void]$out.Add($ind + "api_key: not-needed"); $seenApiKey = $true; continue }
         }
         [void]$out.Add($line)
@@ -324,7 +324,7 @@ function Patch-Hermes-LineFallback {
     if ($inModel) {
         if (-not $seenProvider) { [void]$out.Add($ind + "provider: custom") }
         if (-not $seenBaseUrl) { [void]$out.Add($ind + "base_url: " + $Url) }
-        if (-not $seenDefault) { [void]$out.Add($ind + "default: claude-sonnet-4") }
+        if (-not $seenDefault) { [void]$out.Add($ind + "default: claude-sonnet-5") }
         if (-not $seenApiKey) { [void]$out.Add($ind + "api_key: not-needed") }
     }
     if (-not $hasCustomProviders) {
@@ -381,7 +381,7 @@ function Patch-Hermes {
         Write-Warn "Set these under model: in config.yaml manually:"
         Write-Host "  provider: custom"
         Write-Host ("  base_url: " + $url)
-        Write-Host "  default: claude-sonnet-4"
+        Write-Host "  default: claude-sonnet-5"
         Write-Host "  api_key: not-needed"
         Write-Warn "Proxy is still running - Hermes config needs manual fix."
         return
@@ -516,7 +516,7 @@ function Show-Done {
     Write-Host "================================================" -ForegroundColor Green
     Write-Host ""
     Write-Host ("  API:      http://127.0.0.1:" + $Port + "/v1")
-    Write-Host "  Model:    claude-sonnet-4  (or claude-opus-4)"
+    Write-Host "  Model:    claude-sonnet-5  (or claude-fable-5 / claude-opus-4-8)"
     Write-Host ("  Install:  " + (Get-InstallDir))
     Write-Host ("  Log:      " + $LogFile)
     Write-Host "  Stop:     install.ps1 -Stop"

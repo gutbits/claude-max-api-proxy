@@ -185,7 +185,7 @@ function Patch-HermesConfig {
 
     $text = [regex]::Replace($text, '(?m)^(\s*provider:\s*).*$', '${1}custom', 1)
     $text = [regex]::Replace($text, '(?m)^(\s*base_url:\s*).*$', '${1}' + $baseUrl, 1)
-    $text = [regex]::Replace($text, '(?m)^(\s*default:\s*).*$', '${1}claude-sonnet-4', 1)
+    $text = [regex]::Replace($text, '(?m)^(\s*default:\s*).*$', '${1}claude-sonnet-5', 1)
 
     $modelBlock = ($text -split 'model:', 2)[1] -split "`n`n", 2 | Select-Object -First 1
     if ($modelBlock -notmatch 'api_key:') {
@@ -201,7 +201,7 @@ function Patch-HermesConfig {
     }
 
     Set-Content -Path $HermesConfig -Value $text -NoNewline
-    Write-Info "  -> provider: custom, base_url: $baseUrl, model: claude-sonnet-4"
+    Write-Info "  -> provider: custom, base_url: $baseUrl, model: claude-sonnet-5"
 }
 
 function Start-ProxyServer {
@@ -264,7 +264,7 @@ function Show-Done {
     Write-Host "=======================================================" -ForegroundColor Green
     Write-Host ""
     Write-Host "  Proxy:    http://127.0.0.1:${Port}/v1"
-    Write-Host "  Models:   claude-sonnet-4, claude-opus-4, claude-haiku-4"
+    Write-Host "  Models:   claude-sonnet-5, claude-fable-5, claude-opus-4-8"
     Write-Host "  Install:  $InstallDir"
     Write-Host "  Log:      $LogFile"
     Write-Host "  Stop:     double-click stop-proxy.bat"

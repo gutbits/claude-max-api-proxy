@@ -75,7 +75,7 @@ export function cliResultToOpenai(
 ): OpenAIChatResponse {
   const modelName = result.modelUsage
     ? Object.keys(result.modelUsage)[0]
-    : "claude-sonnet-4-6";
+    : "claude-sonnet-5";
 
   const message: OpenAIChatResponse["choices"][0]["message"] = {
     role: "assistant",

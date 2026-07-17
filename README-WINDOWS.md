@@ -52,11 +52,11 @@ Or double-click **`install.bat`** if you already cloned the repo.
 
 ```
 /model custom:claude-max-proxy:claude-opus-4-8
-/model custom:claude-max-proxy:claude-sonnet-4-6
+/model custom:claude-max-proxy:claude-sonnet-5
 /model custom:claude-max-proxy:claude-fable-5
 ```
 
-Use **dashes** not dots (`4-8` not `4.8`).
+Use **dashes** not dots (`4-8` not `4.8`). Also: `claude-sonnet-4-6`, `claude-haiku-4-5`, aliases `opus` / `sonnet` / `fable`.
 
 ## Requirements
 
