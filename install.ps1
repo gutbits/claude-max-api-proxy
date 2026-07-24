@@ -422,11 +422,13 @@ function Patch-Hermes {
 }
 
 function Stop-Proxy {
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
     if (Test-Path $PidFile) {
         $p = Get-Content $PidFile -ErrorAction SilentlyContinue
         if ($p) {
             # /T kills child node when started via cmd wrapper
-            & taskkill /PID $p /T /F 2>$null | Out-Null
+            cmd /c "taskkill /PID $p /T /F >nul 2>&1"
         }
         Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
     }
@@ -434,14 +436,15 @@ function Stop-Proxy {
         try {
             $c = (Get-CimInstance Win32_Process -Filter ("ProcessId=" + $_.Id)).CommandLine
             if ($c -match 'standalone\.js|claude-max-api-proxy') {
-                & taskkill /PID $_.Id /T /F 2>$null | Out-Null
+                cmd /c "taskkill /PID $($_.Id) /T /F >nul 2>&1"
             }
         }
         catch {}
     }
     Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue |
-        ForEach-Object { & taskkill /PID $_.OwningProcess /T /F 2>$null | Out-Null }
+        ForEach-Object { cmd /c "taskkill /PID $($_.OwningProcess) /T /F >nul 2>&1" }
     Start-Sleep -Seconds 1
+    $ErrorActionPreference = $prevEap
     Write-Info "Proxy stopped."
 }
 
