@@ -44,10 +44,31 @@ function Refresh-Path {
                 [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
 
+function Get-ClaudeExe {
+    $candidates = @()
+    try {
+        $npmRoot = (& npm root -g 2>$null)
+        if ($npmRoot) {
+            $candidates += (Join-Path $npmRoot.ToString().Trim() '@anthropic-ai\claude-code\bin\claude.exe')
+        }
+    } catch {}
+    $candidates += (Join-Path $env:APPDATA 'npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe')
+    if ($env:LOCALAPPDATA) {
+        $candidates += (Join-Path $env:LOCALAPPDATA 'hermes\node\node_modules\@anthropic-ai\claude-code\bin\claude.exe')
+    }
+    foreach ($p in $candidates) {
+        if ($p -and (Test-Path -LiteralPath $p)) {
+            return (Resolve-Path -LiteralPath $p).Path
+        }
+    }
+    return $null
+}
+
 function Set-ClaudeBin {
-    $exe = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe"
-    if (Test-Path $exe) {
+    $exe = Get-ClaudeExe
+    if ($exe) {
         $env:CLAUDE_BIN = $exe
+        [Environment]::SetEnvironmentVariable("CLAUDE_BIN", $exe, "User")
     }
 }
 
@@ -94,16 +115,17 @@ function Install-NodeIfNeeded {
 
 function Install-ClaudeCli {
     Refresh-Path
-    Set-ClaudeBin
-    if (Get-Command claude -ErrorAction SilentlyContinue) {
-        Write-Info "Claude CLI already installed: $(claude --version 2>$null)"
-        return
-    }
-    Write-Info "Installing Claude Code CLI..."
-    npm install -g @anthropic-ai/claude-code
+    Write-Info "Ensuring Claude Code CLI is up to date (Opus 5 needs 2.1.219+)..."
+    npm install -g @anthropic-ai/claude-code@latest --loglevel error
     Refresh-Path
+    Start-Sleep -Seconds 2
     Set-ClaudeBin
-    Test-Command claude
+    $exe = Get-ClaudeExe
+    if (-not $exe) {
+        Write-Fail "Claude CLI install failed. Try: npm install -g @anthropic-ai/claude-code@latest"
+    }
+    Write-Info ("Claude CLI: " + (& $exe --version 2>$null))
+    Write-Info ("Claude exe: " + $exe)
 }
 
 function Update-Repo {
@@ -213,11 +235,17 @@ function Start-ProxyServer {
 
     Set-Location $InstallDir
     Set-ClaudeBin
+    $claude = Get-ClaudeExe
+    if (-not $claude) {
+        Write-Fail "Claude CLI missing (need claude.exe). Re-run full setup."
+    }
     Stop-Proxy
 
     Write-Info "Starting proxy on http://127.0.0.1:${Port} (log: $LogFile)..."
     Write-Info "From: $InstallDir"
-    $nodeCmd = "node `"dist\server\standalone.js`" $Port >> `"$LogFile`" 2>&1"
+    Write-Info "Claude: $claude"
+    # Pass CLAUDE_BIN explicitly — spawn() must use .exe, never .cmd
+    $nodeCmd = "set `"CLAUDE_BIN=$claude`" && node `"dist\server\standalone.js`" $Port >> `"$LogFile`" 2>&1"
     $proc = Start-Process -FilePath "cmd.exe" `
         -ArgumentList "/c", $nodeCmd `
         -WorkingDirectory $InstallDir `
@@ -260,9 +288,10 @@ function Restart-HermesGateway {
 function Show-Done {
     Write-Host ""
     Write-Host "=======================================================" -ForegroundColor Green
-    Write-Host "  Claude Max proxy ready" -ForegroundColor Green
+    Write-Host "  Claude Max proxy ready (v1.1.0)" -ForegroundColor Green
     Write-Host "=======================================================" -ForegroundColor Green
     Write-Host ""
+    Write-Host "  Version:  1.1.0"
     Write-Host "  Proxy:    http://127.0.0.1:${Port}/v1"
     Write-Host "  Models:   claude-opus-5, claude-sonnet-5, claude-fable-5"
     Write-Host "  Install:  $InstallDir"
@@ -270,14 +299,15 @@ function Show-Done {
     Write-Host "  Stop:     double-click stop-proxy.bat"
     Write-Host ""
     Write-Host "  Hermes:   provider custom -> localhost:${Port}"
-    Write-Host "  Switch:   /model custom:claude-max-proxy:claude-opus-4"
+    Write-Host "  Switch:   /model custom:claude-max-proxy:claude-opus-5"
     Write-Host ""
 }
 
 # --- main ---
 Write-Host ""
-Write-Host "  Claude Max API Proxy - Windows setup"
-Write-Host "  ====================================="
+Write-Host "  Claude Max API Proxy - Windows setup (v1.1.0)"
+Write-Host "  ============================================="
+Write-Host "  Models: claude-opus-5 · claude-sonnet-5 · claude-fable-5"
 Write-Host ""
 
 Refresh-Path

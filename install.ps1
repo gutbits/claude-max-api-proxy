@@ -26,7 +26,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ScriptVersion = "1.0.9"
+$ScriptVersion = "1.1.0"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
@@ -69,6 +69,9 @@ function Get-ClaudeExe {
     catch {}
 
     $candidates += (Join-Path $env:APPDATA 'npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe')
+    if ($env:LOCALAPPDATA) {
+        $candidates += (Join-Path $env:LOCALAPPDATA 'hermes\node\node_modules\@anthropic-ai\claude-code\bin\claude.exe')
+    }
     if ($env:ProgramFiles) {
         $candidates += (Join-Path $env:ProgramFiles 'nodejs\node_modules\@anthropic-ai\claude-code\bin\claude.exe')
     }
@@ -139,23 +142,38 @@ function Install-Node {
 
 function Install-ClaudeCli {
     Refresh-Path
-    $exe = Get-ClaudeExe
-    if ($exe) {
-        Write-Info ("Claude CLI OK: " + (claude --version 2>$null))
-        Write-Info ("Claude exe: " + $exe)
-        return
-    }
-    Write-Info "Installing Claude Code CLI..."
-    & npm install -g $ClaudePkg
+    Write-Info "Ensuring Claude Code CLI is up to date (Opus 5 needs 2.1.219+)..."
+    & npm install -g $ClaudePkg --loglevel error
     Refresh-Path
     Start-Sleep -Seconds 2
+
     $exe = Get-ClaudeExe
+    if (-not $exe) {
+        # Also search Hermes-bundled node
+        $hermesClaude = Join-Path $env:LOCALAPPDATA 'hermes\node\node_modules\@anthropic-ai\claude-code\bin\claude.exe'
+        if (Test-Path -LiteralPath $hermesClaude) { $exe = $hermesClaude }
+    }
     if (-not $exe) {
         Write-Warn ("npm root -g: " + (npm root -g 2>$null))
         Write-Warn ("where claude: " + (where.exe claude 2>$null))
-        Write-Fail "Claude CLI install failed. Try manually: npm install -g @anthropic-ai/claude-code"
+        Write-Fail "Claude CLI install failed. Try manually: npm install -g @anthropic-ai/claude-code@latest"
     }
+
+    $env:CLAUDE_BIN = $exe
+    [Environment]::SetEnvironmentVariable("CLAUDE_BIN", $exe, "User")
+
+    $verRaw = & $exe --version 2>$null | Out-String
+    $verRaw = $verRaw.Trim()
+    Write-Info ("Claude CLI: " + $verRaw)
     Write-Info ("Claude exe: " + $exe)
+
+    if ($verRaw -match '(\d+)\.(\d+)\.(\d+)') {
+        $maj = [int]$Matches[1]; $min = [int]$Matches[2]; $pat = [int]$Matches[3]
+        # Min for Opus 5 / Sonnet 5
+        if ($maj -lt 2 -or ($maj -eq 2 -and $min -lt 1) -or ($maj -eq 2 -and $min -eq 1 -and $pat -lt 219)) {
+            Write-Warn "Claude Code is older than 2.1.219 — Opus 5 may fail. Re-run: npm install -g @anthropic-ai/claude-code@latest"
+        }
+    }
 }
 
 function Install-Proxy {
@@ -515,8 +533,9 @@ function Show-Done {
     Write-Host "  Done! Claude Max proxy is ready for Hermes" -ForegroundColor Green
     Write-Host "================================================" -ForegroundColor Green
     Write-Host ""
+    Write-Host ("  Version:  " + $ScriptVersion)
     Write-Host ("  API:      http://127.0.0.1:" + $Port + "/v1")
-    Write-Host "  Model:    claude-sonnet-5  (or claude-opus-5 / claude-fable-5)"
+    Write-Host "  Model:    claude-opus-5  /  claude-sonnet-5  /  claude-fable-5"
     Write-Host ("  Install:  " + (Get-InstallDir))
     Write-Host ("  Log:      " + $LogFile)
     Write-Host "  Stop:     install.ps1 -Stop"
@@ -526,6 +545,7 @@ function Show-Done {
 Write-Host ""
 Write-Host ("  Claude Max Proxy - Windows Installer (gutbits v" + $ScriptVersion + ")")
 Write-Host "  ================================================"
+Write-Host "  Models: claude-opus-5 · claude-sonnet-5 · claude-fable-5"
 Write-Host ""
 
 Refresh-Path
@@ -536,6 +556,11 @@ if ($LoginOnly) { Ensure-Login; exit 0 }
 if ($RestartAll) {
     Stop-AllHermesGateways
     Stop-Proxy
+    Install-ClaudeCli
+    $standalone = Join-Path (Get-InstallDir) "dist\server\standalone.js"
+    if (-not (Test-Path $standalone)) {
+        Install-Proxy | Out-Null
+    }
     Patch-Hermes
     Start-Proxy
     Restart-Hermes

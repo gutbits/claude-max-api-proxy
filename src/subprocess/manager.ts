@@ -24,6 +24,11 @@ import {
   isInputJsonDelta,
   isContentBlockStop,
 } from "../types/claude-cli.js";
+import {
+  resolveClaudeBin,
+  versionAtLeast,
+  MIN_CLAUDE_CODE_VERSION,
+} from "./claude-bin.js";
 export interface SubprocessOptions {
   model: string;
   sessionId?: string;
@@ -101,13 +106,22 @@ export class ClaudeSubprocess extends EventEmitter {
 
     return new Promise((resolve, reject) => {
       try {
+        const claudeBin = resolveClaudeBin();
+        if (process.env.DEBUG_SUBPROCESS) {
+          console.error(`[Subprocess] CLAUDE_BIN=${claudeBin}`);
+          console.error(`[Subprocess] model=${options.model}`);
+        }
+
         // Use spawn() for security - no shell interpretation
-        this.process = spawn(process.env.CLAUDE_BIN || "claude", args, {
+        // Windows: must be claude.exe (not .cmd) or spawn throws EINVAL
+        this.process = spawn(claudeBin, args, {
           cwd: options.cwd || process.cwd(),
           env: Object.fromEntries(
             Object.entries(process.env).filter(([k]) => k !== "CLAUDECODE")
           ),
           stdio: ["pipe", "pipe", "pipe"],
+          windowsHide: true,
+          shell: false,
         });
 
         // Set timeout
@@ -119,13 +133,20 @@ export class ClaudeSubprocess extends EventEmitter {
           }
         }, timeout);
 
-        // Handle spawn errors (e.g., claude not found)
+        // Handle spawn errors (e.g., claude not found / EINVAL on .cmd)
         this.process.on("error", (err) => {
           this.clearTimeout();
-          if (err.message.includes("ENOENT")) {
+          const msg = err.message || String(err);
+          if (msg.includes("ENOENT")) {
             reject(
               new Error(
                 "Claude CLI not found. Install with: npm install -g @anthropic-ai/claude-code"
+              )
+            );
+          } else if (msg.includes("EINVAL") || /spawn .* EINVAL/i.test(msg)) {
+            reject(
+              new Error(
+                `Failed to spawn Claude CLI (EINVAL). On Windows set CLAUDE_BIN to claude.exe, not .cmd. Tried: ${claudeBin}`
               )
             );
           } else {
@@ -290,30 +311,60 @@ export class ClaudeSubprocess extends EventEmitter {
 /**
  * Verify that Claude CLI is installed and accessible
  */
-export async function verifyClaude(): Promise<{ ok: boolean; error?: string; version?: string }> {
+export async function verifyClaude(): Promise<{
+  ok: boolean;
+  error?: string;
+  version?: string;
+  bin?: string;
+  warning?: string;
+}> {
   return new Promise((resolve) => {
-    const proc = spawn(process.env.CLAUDE_BIN || "claude", ["--version"], { stdio: "pipe" });
+    const bin = resolveClaudeBin();
+    const proc = spawn(bin, ["--version"], {
+      stdio: "pipe",
+      windowsHide: true,
+      shell: false,
+    });
     let output = "";
+    let stderr = "";
 
     proc.stdout?.on("data", (chunk: Buffer) => {
       output += chunk.toString();
     });
-
-    proc.on("error", () => {
-      resolve({
-        ok: false,
-        error:
-          "Claude CLI not found. Install with: npm install -g @anthropic-ai/claude-code",
-      });
+    proc.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
     });
 
-    proc.on("close", (code) => {
-      if (code === 0) {
-        resolve({ ok: true, version: output.trim() });
+    proc.on("error", (err) => {
+      const msg = err.message || String(err);
+      if (msg.includes("EINVAL")) {
+        resolve({
+          ok: false,
+          bin,
+          error: `Cannot spawn Claude CLI (EINVAL). Set CLAUDE_BIN to the full path of claude.exe. Tried: ${bin}`,
+        });
       } else {
         resolve({
           ok: false,
-          error: "Claude CLI returned non-zero exit code",
+          bin,
+          error:
+            "Claude CLI not found. Install with: npm install -g @anthropic-ai/claude-code",
+        });
+      }
+    });
+
+    proc.on("close", (code) => {
+      const version = (output || stderr).trim();
+      if (code === 0 || version.match(/\d+\.\d+\.\d+/)) {
+        const warning = versionAtLeast(version, MIN_CLAUDE_CODE_VERSION)
+          ? undefined
+          : `Claude Code ${version} is too old for Opus 5 / Sonnet 5. Need ${MIN_CLAUDE_CODE_VERSION.join(".")}+. Run: npm install -g @anthropic-ai/claude-code@latest`;
+        resolve({ ok: true, version, bin, warning });
+      } else {
+        resolve({
+          ok: false,
+          bin,
+          error: `Claude CLI returned exit ${code}. ${stderr || output}`.trim(),
         });
       }
     });

@@ -56,6 +56,11 @@ Or double-click **`install.bat`** if you already cloned the repo.
 
 Use **dashes** not dots (`4-8` not `4.8`). Also: `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5`, aliases `opus` / `sonnet` / `fable`.
 
+## Opus 5 / crash notes (v1.1.0+)
+
+- **Opus 5** needs Claude Code **2.1.219+**. `-RestartAll` now force-upgrades the CLI.
+- **Windows crash (`EINVAL`)**: the proxy must spawn `claude.exe`, not `claude.cmd`. Installer sets `CLAUDE_BIN` to the `.exe` path.
+
 ## Requirements
 
 - Windows 10 / Server 2019+

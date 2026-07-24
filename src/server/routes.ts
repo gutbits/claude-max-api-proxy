@@ -13,6 +13,8 @@ import {
   createDoneChunk,
 } from "../adapter/cli-to-openai.js";
 import { displayModelId, getAdvertisedModelIds } from "../models/catalog.js";
+import { PROXY_NAME, PROXY_VERSION } from "../version.js";
+import { resolveClaudeBin } from "../subprocess/claude-bin.js";
 import type { OpenAIChatRequest, OpenAIToolCall } from "../types/openai.js";
 import type { ClaudeCliAssistant, ClaudeCliResult, ClaudeCliStreamEvent } from "../types/claude-cli.js";
 
@@ -403,7 +405,11 @@ export function handleModels(_req: Request, res: Response): void {
 export function handleHealth(_req: Request, res: Response): void {
   res.json({
     status: "ok",
+    name: PROXY_NAME,
+    version: PROXY_VERSION,
     provider: "claude-code-cli",
+    claude_bin: resolveClaudeBin(),
+    models_count: getAdvertisedModelIds().length,
     timestamp: new Date().toISOString(),
   });
 }
