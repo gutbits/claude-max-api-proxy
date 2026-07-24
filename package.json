@@ -24,20 +24,20 @@
     "openai-compatible",
     "api-server",
     "oauth",
-    "clawdbot",
+    "hermes",
     "llm",
     "ai"
   ],
-  "author": "Atal Ashutosh",
+  "author": "gutbits",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/atalovesyou/claude-max-api-proxy"
+    "url": "https://github.com/gutbits/claude-max-api-proxy"
   },
   "bugs": {
-    "url": "https://github.com/atalovesyou/claude-max-api-proxy/issues"
+    "url": "https://github.com/gutbits/claude-max-api-proxy/issues"
   },
-  "homepage": "https://github.com/atalovesyou/claude-max-api-proxy#readme",
+  "homepage": "https://github.com/gutbits/claude-max-api-proxy#readme",
   "dependencies": {
     "express": "^4.21.2",
     "uuid": "^11.0.5"
@@ -47,14 +47,6 @@
     "@types/node": "^22.10.7",
     "@types/uuid": "^10.0.0",
     "typescript": "^5.7.3"
-  },
-  "peerDependencies": {
-    "clawdbot": ">=2026.1.0"
-  },
-  "peerDependenciesMeta": {
-    "clawdbot": {
-      "optional": true
-    }
   },
   "engines": {
     "node": ">=20"
