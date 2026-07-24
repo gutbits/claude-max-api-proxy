@@ -288,10 +288,10 @@ function Restart-HermesGateway {
 function Show-Done {
     Write-Host ""
     Write-Host "=======================================================" -ForegroundColor Green
-    Write-Host "  Claude Max proxy ready (v1.1.0)" -ForegroundColor Green
+    Write-Host "  Claude Max proxy ready (v1.1.1)" -ForegroundColor Green
     Write-Host "=======================================================" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  Version:  1.1.0"
+    Write-Host "  Version:  1.1.1"
     Write-Host "  Proxy:    http://127.0.0.1:${Port}/v1"
     Write-Host "  Models:   claude-opus-5, claude-sonnet-5, claude-fable-5"
     Write-Host "  Install:  $InstallDir"
@@ -305,7 +305,7 @@ function Show-Done {
 
 # --- main ---
 Write-Host ""
-Write-Host "  Claude Max API Proxy - Windows setup (v1.1.0)"
+Write-Host "  Claude Max API Proxy - Windows setup (v1.1.1)"
 Write-Host "  ============================================="
 Write-Host "  Models: claude-opus-5 · claude-sonnet-5 · claude-fable-5"
 Write-Host ""

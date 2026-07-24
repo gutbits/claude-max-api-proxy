@@ -26,7 +26,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ScriptVersion = "1.1.0"
+$ScriptVersion = "1.1.1"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
@@ -191,20 +191,33 @@ function Install-Proxy {
         }
     }
     elseif (Test-Path (Join-Path $dir ".git")) {
-        Write-Info ("Updating " + $dir + " ...")
-        & git -C $dir pull --ff-only 2>$null
+        Write-Info ("Updating " + $dir + " to latest main...")
+        & git -C $dir remote set-url origin $RepoUrl 2>$null
+        & git -C $dir fetch origin 2>&1 | Out-Null
+        $reset = & git -C $dir reset --hard origin/main 2>&1
+        Write-Info ($reset | Out-String).Trim()
     }
 
     Save-InstallDir $dir
     Set-Location $dir
     Write-Info "npm install..."
     & npm install --loglevel error
-    Write-Info "npm run build..."
+    Write-Info "npm run build (refreshing model catalog)..."
     & npm run build
+    if ($LASTEXITCODE -ne 0) {
+        Write-Fail "npm run build failed — model list will stay stale"
+    }
 
     if (-not (Test-Path $standalone)) {
         Write-Fail ("Build failed - no " + $standalone)
     }
+
+    # Sanity: Opus 5 must be in the built catalog
+    $catalogJs = Join-Path $dir "dist\models\catalog.js"
+    if (-not (Select-String -Path $catalogJs -Pattern 'claude-opus-5' -Quiet)) {
+        Write-Fail "Build OK but dist\models\catalog.js is missing claude-opus-5 — aborting"
+    }
+    Write-Info "Built catalog includes claude-opus-5"
     return $dir
 }
 
@@ -411,22 +424,24 @@ function Patch-Hermes {
 function Stop-Proxy {
     if (Test-Path $PidFile) {
         $p = Get-Content $PidFile -ErrorAction SilentlyContinue
-        if ($p -and (Get-Process -Id $p -ErrorAction SilentlyContinue)) {
-            Stop-Process -Id $p -Force -ErrorAction SilentlyContinue
+        if ($p) {
+            # /T kills child node when started via cmd wrapper
+            & taskkill /PID $p /T /F 2>$null | Out-Null
         }
         Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
     }
     Get-Process -Name node -ErrorAction SilentlyContinue | ForEach-Object {
         try {
             $c = (Get-CimInstance Win32_Process -Filter ("ProcessId=" + $_.Id)).CommandLine
-            if ($c -match 'standalone\.js') {
-                Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+            if ($c -match 'standalone\.js|claude-max-api-proxy') {
+                & taskkill /PID $_.Id /T /F 2>$null | Out-Null
             }
         }
         catch {}
     }
     Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue |
-        ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+        ForEach-Object { & taskkill /PID $_.OwningProcess /T /F 2>$null | Out-Null }
+    Start-Sleep -Seconds 1
     Write-Info "Proxy stopped."
 }
 
@@ -557,10 +572,8 @@ if ($RestartAll) {
     Stop-AllHermesGateways
     Stop-Proxy
     Install-ClaudeCli
-    $standalone = Join-Path (Get-InstallDir) "dist\server\standalone.js"
-    if (-not (Test-Path $standalone)) {
-        Install-Proxy | Out-Null
-    }
+    # Always pull + rebuild — stale dist was hiding opus-5 / sonnet-5
+    Install-Proxy | Out-Null
     Patch-Hermes
     Start-Proxy
     Restart-Hermes
