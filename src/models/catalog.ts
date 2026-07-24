@@ -11,11 +11,12 @@ export interface ModelEntry {
 
 export const ADVERTISED_MODELS: ModelEntry[] = [
   // Opus
+  { id: "claude-opus-5", cliModel: "claude-opus-5", name: "Claude Opus 5", family: "opus" },
   { id: "claude-opus-4-8", cliModel: "claude-opus-4-8", name: "Claude Opus 4.8", family: "opus" },
   { id: "claude-opus-4-7", cliModel: "claude-opus-4-7", name: "Claude Opus 4.7", family: "opus" },
   { id: "claude-opus-4-6", cliModel: "claude-opus-4-6", name: "Claude Opus 4.6", family: "opus" },
-  { id: "claude-opus-4", cliModel: "opus", name: "Claude Opus (latest alias)", family: "opus" },
-  { id: "opus", cliModel: "opus", name: "Opus alias", family: "opus" },
+  { id: "claude-opus-4", cliModel: "claude-opus-4", name: "Claude Opus 4 (legacy)", family: "opus" },
+  { id: "opus", cliModel: "opus", name: "Opus alias (latest)", family: "opus" },
   { id: "opus-max", cliModel: "opus", name: "Opus Max alias", family: "opus" },
   // Sonnet
   { id: "claude-sonnet-5", cliModel: "claude-sonnet-5", name: "Claude Sonnet 5", family: "sonnet" },
@@ -92,10 +93,11 @@ export function displayModelId(cliModel: string | undefined, requestedModel?: st
     }
   }
 
+  if (raw.includes("opus-5") || raw.includes("opus-5.")) return "claude-opus-5";
   if (raw.includes("opus-4-8") || raw.includes("opus-4.8")) return "claude-opus-4-8";
   if (raw.includes("opus-4-7")) return "claude-opus-4-7";
   if (raw.includes("opus-4-6")) return "claude-opus-4-6";
-  if (raw.includes("opus")) return "claude-opus-4";
+  if (raw.includes("opus")) return "claude-opus-5";
   if (raw.includes("sonnet-5") || raw.includes("sonnet-5.")) return "claude-sonnet-5";
   if (raw.includes("sonnet-4-6")) return "claude-sonnet-4-6";
   if (raw.includes("sonnet-4-5")) return "claude-sonnet-4-5";

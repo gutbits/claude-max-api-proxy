@@ -179,7 +179,7 @@ print_done() {
   echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
   echo ""
   echo "  Proxy:    http://127.0.0.1:${PORT}/v1"
-  echo "  Models:   claude-sonnet-5, claude-fable-5, claude-opus-4-8"
+  echo "  Models:   claude-opus-5, claude-sonnet-5, claude-fable-5"
   echo "  Log:      $LOG_FILE"
   echo "  Stop:     bash $(basename "$0" | sed 's/setup-and-run/stop/')  (or kill \$(cat $PID_FILE))"
   echo ""

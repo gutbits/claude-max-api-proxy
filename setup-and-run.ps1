@@ -264,7 +264,7 @@ function Show-Done {
     Write-Host "=======================================================" -ForegroundColor Green
     Write-Host ""
     Write-Host "  Proxy:    http://127.0.0.1:${Port}/v1"
-    Write-Host "  Models:   claude-sonnet-5, claude-fable-5, claude-opus-4-8"
+    Write-Host "  Models:   claude-opus-5, claude-sonnet-5, claude-fable-5"
     Write-Host "  Install:  $InstallDir"
     Write-Host "  Log:      $LogFile"
     Write-Host "  Stop:     double-click stop-proxy.bat"

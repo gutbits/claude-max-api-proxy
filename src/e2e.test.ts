@@ -56,6 +56,7 @@ describe("health and models", () => {
 
     const ids = body.data.map((m: any) => m.id);
     for (const expected of [
+      "claude-opus-5",
       "claude-opus-4-8",
       "claude-opus-4-7",
       "claude-opus-4-6",

@@ -13,7 +13,7 @@ import { ADVERTISED_MODELS } from "./models/catalog.js";
 const PROVIDER_ID = "claude-code-cli";
 const PROVIDER_LABEL = "Claude Code CLI";
 const DEFAULT_PORT = 3456;
-const DEFAULT_MODEL = "claude-code-cli/claude-opus-4-8";
+const DEFAULT_MODEL = "claude-code-cli/claude-opus-5";
 
 // Available models (from catalog)
 const AVAILABLE_MODELS = ADVERTISED_MODELS.filter((m) =>

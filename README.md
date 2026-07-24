@@ -50,7 +50,7 @@ Your App (Hermes, Continue.dev, etc.)
 
 - **OpenAI-compatible API** — Works with any client that supports OpenAI's API format
 - **Streaming support** — Real-time token streaming via Server-Sent Events
-- **Multiple models** — Fable 5, Opus 4.8, Sonnet 5, Haiku 4.5 + aliases
+- **Multiple models** — Opus 5, Fable 5, Sonnet 5, Haiku 4.5 + aliases
 - **Hermes-ready** — One-click Windows installer patches Hermes config
 - **Content block handling** — Proper text block separators for multi-block responses
 - **Session management** — Maintains conversation context via session IDs
@@ -135,13 +135,13 @@ curl -N -X POST http://localhost:3456/v1/chat/completions \
 
 | Model ID | Alias | Notes |
 |----------|-------|-------|
+| `claude-opus-5` | `opus` | Opus 5 |
 | `claude-fable-5` | `fable` | Fable 5 — frontier agentic |
-| `claude-opus-4-8` | `opus` | Opus 4.8 |
 | `claude-sonnet-5` | `sonnet` | Sonnet 5 (default) |
-| `claude-sonnet-4-6` | — | Sonnet 4.6 |
+| `claude-opus-4-8` | — | Opus 4.8 |
 | `claude-haiku-4-5` | `haiku` | Haiku 4.5 |
 
-Also advertised: `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-5`, `claude-sonnet-4`, plus `-max` aliases. Unknown models default to Opus.
+Also advertised: `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-sonnet-4-5`, plus `-max` aliases. Unknown models default to Opus.
 
 ## Configuration with Popular Tools
 
@@ -160,9 +160,9 @@ model:
 Then switch models in chat:
 
 ```
+/model custom:claude-max-proxy:claude-opus-5
 /model custom:claude-max-proxy:claude-sonnet-5
 /model custom:claude-max-proxy:claude-fable-5
-/model custom:claude-max-proxy:claude-opus-4-8
 ```
 
 ### Continue.dev

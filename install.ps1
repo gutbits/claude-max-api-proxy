@@ -26,7 +26,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ScriptVersion = "1.0.8"
+$ScriptVersion = "1.0.9"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
@@ -516,7 +516,7 @@ function Show-Done {
     Write-Host "================================================" -ForegroundColor Green
     Write-Host ""
     Write-Host ("  API:      http://127.0.0.1:" + $Port + "/v1")
-    Write-Host "  Model:    claude-sonnet-5  (or claude-fable-5 / claude-opus-4-8)"
+    Write-Host "  Model:    claude-sonnet-5  (or claude-opus-5 / claude-fable-5)"
     Write-Host ("  Install:  " + (Get-InstallDir))
     Write-Host ("  Log:      " + $LogFile)
     Write-Host "  Stop:     install.ps1 -Stop"
