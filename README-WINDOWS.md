@@ -9,7 +9,7 @@ Copy **only the command** — not the `PS C:\...>` prompt.
 **Fresh install** (download, setup, start proxy + Hermes gateway):
 
 ```powershell
-Remove-Item $env:USERPROFILE\install.ps1 -Force -EA 0; iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/main/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1
+Remove-Item $env:USERPROFILE\install.ps1 -Force -EA 0; iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/main/install.ps1?v=1.1.3" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1
 ```
 
 **Already installed — restart everything** (kill gateways + proxy, repatch Hermes, start fresh):
@@ -21,7 +21,7 @@ powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAl
 **Update code + rebuild + restart** (pull latest, upgrade Claude CLI, rebuild models — do **not** call `npm` in the parent shell; Hermes `npm.ps1` is blocked by ExecutionPolicy):
 
 ```powershell
-iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/main/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll; (Invoke-RestMethod http://127.0.0.1:3456/v1/models).data.id
+iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/main/install.ps1?v=1.1.3" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll; (Invoke-RestMethod http://127.0.0.1:3456/v1/models).data.id
 ```
 
 Or double-click **`install.bat`** if you already cloned the repo.
