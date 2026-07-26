@@ -24,9 +24,9 @@ param(
     [switch]$RestartAll
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
-$ScriptVersion = "1.1.3"
+$ScriptVersion = "1.1.4"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
@@ -60,17 +60,31 @@ function Get-NpmCmd {
     Write-Fail "npm.cmd not found. Install Node.js 20+ from https://nodejs.org (Hermes npm.ps1 is blocked by ExecutionPolicy)."
 }
 
+# Run npm without leaking stdout into the return value (PS would mix it with exit code)
 function Invoke-Npm {
     param([Parameter(Mandatory = $true)][string[]]$NpmArgs)
     $npm = Get-NpmCmd
     Write-Info ("Using npm: " + $npm)
-    & $npm @NpmArgs
-    return $LASTEXITCODE
+    & $npm @NpmArgs | Out-Host
+    $code = $LASTEXITCODE
+    if ($null -eq $code) { $code = 0 }
+    return [int]$code
+}
+
+# git writes progress to stderr; under ErrorAction Stop that aborts the installer
+function Invoke-Git {
+    param([Parameter(Mandatory = $true)][string[]]$GitArgs)
+    $argLine = ($GitArgs | ForEach-Object {
+        if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ }
+    }) -join ' '
+    cmd.exe /c ("git " + $argLine)
+    $code = $LASTEXITCODE
+    if ($null -eq $code) { $code = 0 }
+    return [int]$code
 }
 
 function Stop-PidTree([int]$ProcessId) {
     if ($ProcessId -le 0) { return }
-    # Avoid ">nul 2>&1" inside install.ps1 - PS 5.1 parses those as script redirections and breaks the file
     $null = Start-Process -FilePath "taskkill.exe" `
         -ArgumentList @("/PID", "$ProcessId", "/T", "/F") `
         -WindowStyle Hidden -Wait -PassThru -ErrorAction SilentlyContinue
@@ -221,15 +235,18 @@ function Install-Proxy {
         }
         if (-not (Test-Path (Join-Path $dir ".git"))) {
             Write-Info ("Cloning to " + $dir + " ...")
-            & git clone $RepoUrl $dir
+            $code = Invoke-Git @("clone", $RepoUrl, $dir)
+            if ($code -ne 0) { Write-Fail ("git clone failed (exit " + $code + ")") }
         }
     }
     elseif (Test-Path (Join-Path $dir ".git")) {
         Write-Info ("Updating " + $dir + " to latest main...")
-        & git -C $dir remote set-url origin $RepoUrl 2>$null
-        & git -C $dir fetch origin 2>&1 | Out-Null
-        $reset = & git -C $dir reset --hard origin/main 2>&1
-        Write-Info ($reset | Out-String).Trim()
+        [void](Invoke-Git @("-C", $dir, "remote", "set-url", "origin", $RepoUrl))
+        $code = Invoke-Git @("-C", $dir, "fetch", "origin")
+        if ($code -ne 0) { Write-Fail ("git fetch failed (exit " + $code + ")") }
+        $code = Invoke-Git @("-C", $dir, "reset", "--hard", "origin/main")
+        if ($code -ne 0) { Write-Fail ("git reset failed (exit " + $code + ")") }
+        Write-Info ("HEAD: " + ((& git -C $dir rev-parse --short HEAD) | Out-String).Trim())
     }
 
     Save-InstallDir $dir
@@ -242,7 +259,7 @@ function Install-Proxy {
     Write-Info "npm run build (refreshing model catalog)..."
     $code = Invoke-Npm -NpmArgs @("run", "build")
     if ($code -ne 0) {
-        Write-Fail "npm run build failed - model list will stay stale"
+        Write-Fail ("npm run build failed (exit " + $code + ")")
     }
 
     if (-not (Test-Path $standalone)) {
@@ -627,6 +644,28 @@ function Show-Done {
     Write-Host ""
 }
 
+function Assert-ProxyReady {
+    Write-Info "Verifying /health and /v1/models..."
+    try {
+        $h = Invoke-RestMethod -Uri ("http://127.0.0.1:" + $Port + "/health") -TimeoutSec 5
+        $ids = @((Invoke-RestMethod -Uri ("http://127.0.0.1:" + $Port + "/v1/models") -TimeoutSec 5).data.id)
+    }
+    catch {
+        Write-Fail ("Proxy not reachable after start: " + $_.Exception.Message)
+    }
+    if (-not $h.version) {
+        Write-Fail "Health has no version field - old proxy binary still running. Kill node standalone.js and re-run."
+    }
+    if ($h.version -ne $ScriptVersion) {
+        Write-Fail ("Proxy version is '" + $h.version + "' but installer is " + $ScriptVersion + " - stale process. Re-run -RestartAll.")
+    }
+    if ($ids -notcontains "claude-opus-5") {
+        Write-Fail ("claude-opus-5 missing from models: " + ($ids -join ", "))
+    }
+    Write-Info ("OK version=" + $h.version + " models=" + $ids.Count + " (includes claude-opus-5)")
+    Write-Host ($ids -join "`n")
+}
+
 Write-Host ""
 Write-Host ("  Claude Max Proxy - Windows Installer (gutbits v" + $ScriptVersion + ")")
 Write-Host "  ================================================"
@@ -647,6 +686,7 @@ if ($RestartAll) {
     Patch-Hermes
     Start-Proxy
     Restart-Hermes
+    Assert-ProxyReady
     Show-Done
     exit 0
 }
@@ -660,6 +700,7 @@ if ($StartOnly) {
         Ensure-Login
     }
     Start-Proxy
+    Assert-ProxyReady
     Show-Done
     exit 0
 }
@@ -672,4 +713,5 @@ Ensure-Login
 Patch-Hermes
 Start-Proxy
 Restart-Hermes
+Assert-ProxyReady
 Show-Done
