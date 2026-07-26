@@ -33,10 +33,10 @@ powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAl
 **Update to latest** (download installer → pull, rebuild, upgrade Claude CLI, restart):
 
 ```powershell
-$sha=(Invoke-RestMethod https://api.github.com/repos/gutbits/claude-max-api-proxy/commits/main).sha; iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/$sha/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll; (Invoke-RestMethod http://127.0.0.1:3456/v1/models).data.id
+$sha=(Invoke-RestMethod https://api.github.com/repos/gutbits/claude-max-api-proxy/commits/main).sha; iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/$sha/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll
 ```
 
-After update you should see `claude-opus-5` first and banner `v1.1.4`. Health: `http://127.0.0.1:3456/health` → `"version":"1.1.4"`.
+After update the installer must print banner **v1.1.4**, `OK version=1.1.4`, and `claude-opus-5`. Health: `http://127.0.0.1:3456/health` → `"version":"1.1.4"`.
 
 ## How It Works
 
