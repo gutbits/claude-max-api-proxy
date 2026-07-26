@@ -26,7 +26,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ScriptVersion = "1.1.2"
+$ScriptVersion = "1.1.3"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
@@ -45,7 +45,7 @@ function Refresh-Path {
                 [Environment]::GetEnvironmentVariable("Path", "User")
 }
 
-# Prefer npm.cmd — Hermes puts npm.ps1 first and Restricted policy blocks it
+# Prefer npm.cmd - Hermes puts npm.ps1 first and Restricted policy blocks it
 function Get-NpmCmd {
     $candidates = @(
         (Join-Path $env:ProgramFiles "nodejs\npm.cmd"),
@@ -70,7 +70,7 @@ function Invoke-Npm {
 
 function Stop-PidTree([int]$ProcessId) {
     if ($ProcessId -le 0) { return }
-    # Avoid ">nul 2>&1" inside install.ps1 — PS 5.1 parses those as script redirections and breaks the file
+    # Avoid ">nul 2>&1" inside install.ps1 - PS 5.1 parses those as script redirections and breaks the file
     $null = Start-Process -FilePath "taskkill.exe" `
         -ArgumentList @("/PID", "$ProcessId", "/T", "/F") `
         -WindowStyle Hidden -Wait -PassThru -ErrorAction SilentlyContinue
@@ -205,7 +205,7 @@ function Install-ClaudeCli {
         $maj = [int]$Matches[1]; $min = [int]$Matches[2]; $pat = [int]$Matches[3]
         # Min for Opus 5 / Sonnet 5
         if ($maj -lt 2 -or ($maj -eq 2 -and $min -lt 1) -or ($maj -eq 2 -and $min -eq 1 -and $pat -lt 219)) {
-            Write-Warn "Claude Code is older than 2.1.219 — Opus 5 may fail. Re-run: npm.cmd install -g @anthropic-ai/claude-code@latest"
+            Write-Warn "Claude Code is older than 2.1.219 - Opus 5 may fail. Re-run: npm.cmd install -g @anthropic-ai/claude-code@latest"
         }
     }
 }
@@ -242,7 +242,7 @@ function Install-Proxy {
     Write-Info "npm run build (refreshing model catalog)..."
     $code = Invoke-Npm -NpmArgs @("run", "build")
     if ($code -ne 0) {
-        Write-Fail "npm run build failed — model list will stay stale"
+        Write-Fail "npm run build failed - model list will stay stale"
     }
 
     if (-not (Test-Path $standalone)) {
@@ -252,7 +252,7 @@ function Install-Proxy {
     # Sanity: Opus 5 must be in the built catalog
     $catalogJs = Join-Path $dir "dist\models\catalog.js"
     if (-not (Select-String -Path $catalogJs -Pattern 'claude-opus-5' -Quiet)) {
-        Write-Fail "Build OK but dist\models\catalog.js is missing claude-opus-5 — aborting"
+        Write-Fail "Build OK but dist\models\catalog.js is missing claude-opus-5 - aborting"
     }
     Write-Info "Built catalog includes claude-opus-5"
     return $dir
@@ -484,10 +484,24 @@ function Stop-Proxy {
     Write-Info "Proxy stopped."
 }
 
+function Get-NodeExe {
+    $candidates = @(
+        (Join-Path $env:ProgramFiles "nodejs\node.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "nodejs\node.exe"),
+        (Join-Path $env:LOCALAPPDATA "hermes\node\node.exe")
+    )
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path -LiteralPath $c)) { return $c }
+    }
+    $found = Get-Command node.exe -ErrorAction SilentlyContinue
+    if ($found -and $found.Source) { return $found.Source }
+    Write-Fail "node.exe not found. Install Node.js 20+ from https://nodejs.org"
+}
+
 function Start-Proxy {
     $dir = Get-InstallDir
     $standalone = Join-Path $dir "dist\server\standalone.js"
-    if (-not (Test-Path $standalone)) {
+    if (-not (Test-Path -LiteralPath $standalone)) {
         Write-Fail "Not built. Run without -StartOnly first."
     }
 
@@ -498,24 +512,37 @@ function Start-Proxy {
 
     Stop-Proxy
 
-    $wrapper = Join-Path $env:TEMP "claude-max-run.cmd"
-    # Build bat without PS parsing 2>&1 / quotes from Path
-    $safePath = ($env:Path + ";" + $NpmGlobal) -replace '"', ''
-    $lines = @(
-        "@echo off",
-        ("set `"CLAUDE_BIN=" + $claude + "`""),
-        ("set `"PATH=" + $safePath + "`""),
-        ("cd /d `"$dir`""),
-        ("node `"dist\server\standalone.js`" $Port 1>>`"$LogFile`" 2>&1")
-    )
-    Set-Content -Path $wrapper -Value ($lines -join "`r`n") -Encoding ASCII
+    $node = Get-NodeExe
+    $env:CLAUDE_BIN = $claude
+
+    # Clear old logs (do not embed cmd redirections in this script - PS 5.1 breaks on them)
+    if (Test-Path -LiteralPath $LogFile) {
+        Remove-Item -LiteralPath $LogFile -Force -ErrorAction SilentlyContinue
+    }
+    $errLog = $LogFile + ".err"
+    if (Test-Path -LiteralPath $errLog) {
+        Remove-Item -LiteralPath $errLog -Force -ErrorAction SilentlyContinue
+    }
 
     Write-Info ("Starting proxy on http://127.0.0.1:" + $Port + " ...")
     Write-Info ("Install dir: " + $dir)
+    Write-Info ("Node: " + $node)
+    Write-Info ("Claude: " + $claude)
     Write-Info ("Log: " + $LogFile)
 
-    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", $wrapper) -WindowStyle Hidden -PassThru
-    $proc.Id | Set-Content $PidFile
+    # Start node.exe directly - no .cmd wrapper, no quote escaping, no 2>&1 in source
+    $proc = Start-Process -FilePath $node `
+        -ArgumentList @($standalone, "$Port") `
+        -WorkingDirectory $dir `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput $LogFile `
+        -RedirectStandardError $errLog `
+        -PassThru
+
+    if (-not $proc) {
+        Write-Fail "Failed to start node process."
+    }
+    $proc.Id | Set-Content -Path $PidFile -Encoding ASCII
 
     $ok = $false
     for ($i = 0; $i -lt 30; $i++) {
@@ -531,6 +558,11 @@ function Start-Proxy {
 
     if (-not $ok) {
         Show-LogTail
+        if (Test-Path -LiteralPath $errLog) {
+            Write-Host "--- stderr ---" -ForegroundColor DarkGray
+            Get-Content $errLog -Tail 40 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+            Write-Host "--------------" -ForegroundColor DarkGray
+        }
         if ($proc.HasExited) {
             Write-Fail ("Proxy crashed (exit " + $proc.ExitCode + "). See log above.")
         }
@@ -573,14 +605,10 @@ function Restart-Hermes {
     $ErrorActionPreference = "Continue"
     try { & hermes gateway stop 2>&1 | Out-Null } catch {}
     Start-Sleep -Seconds 2
-    $gwLog = Join-Path $env:LOCALAPPDATA "hermes\gateway.log"
-    if (-not (Test-Path (Split-Path $gwLog))) {
-        $gwLog = Join-Path $env:USERPROFILE ".hermes\gateway.log"
-    }
-    $gwCmd = 'hermes gateway run >> "' + $gwLog + '" 2>&1'
-    Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", $gwCmd) -WindowStyle Hidden
+    # cmd /c with plain args only (no > redirects in this .ps1 source)
+    Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", "hermes gateway run") -WindowStyle Hidden
     Start-Sleep -Seconds 2
-    & hermes gateway status 2>&1
+    try { & hermes gateway status } catch {}
     $ErrorActionPreference = $prevEap
 }
 
@@ -602,7 +630,7 @@ function Show-Done {
 Write-Host ""
 Write-Host ("  Claude Max Proxy - Windows Installer (gutbits v" + $ScriptVersion + ")")
 Write-Host "  ================================================"
-Write-Host "  Models: claude-opus-5 · claude-sonnet-5 · claude-fable-5"
+Write-Host "  Models: claude-opus-5 | claude-sonnet-5 | claude-fable-5"
 Write-Host ""
 
 Refresh-Path
@@ -614,7 +642,7 @@ if ($RestartAll) {
     Stop-AllHermesGateways
     Stop-Proxy
     Install-ClaudeCli
-    # Always pull + rebuild — stale dist was hiding opus-5 / sonnet-5
+    # Always pull + rebuild - stale dist was hiding opus-5 / sonnet-5
     Install-Proxy | Out-Null
     Patch-Hermes
     Start-Proxy

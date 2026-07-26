@@ -36,7 +36,7 @@ powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAl
 iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/main/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll; (Invoke-RestMethod http://127.0.0.1:3456/v1/models).data.id
 ```
 
-After update you should see `claude-opus-5` first. Health: `http://127.0.0.1:3456/health` → `"version":"1.1.2"`.
+After update you should see `claude-opus-5` first. Health: `http://127.0.0.1:3456/health` → `"version":"1.1.3"`.
 
 ## How It Works
 
