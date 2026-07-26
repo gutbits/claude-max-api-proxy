@@ -26,7 +26,7 @@ param(
 
 $ErrorActionPreference = "Continue"
 
-$ScriptVersion = "1.1.5"
+$ScriptVersion = "1.1.6"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
@@ -312,14 +312,24 @@ function Install-Proxy {
 function Ensure-Login {
     Refresh-Path
     Set-ClaudeEnv | Out-Null
-    $s = & claude auth status 2>&1 | Out-String
+    $exe = Get-ClaudeExe
+    if (-not $exe) {
+        Write-Fail "Claude CLI missing - cannot login."
+    }
+    $s = & $exe auth status 2>&1 | Out-String
     if ($s -match '"loggedIn"\s*:\s*true') {
         Write-Info "Claude logged in."
         ($s -split "`n") | Where-Object { $_ -match 'email|subscriptionType' } | ForEach-Object { Write-Host ("  " + $_) }
         return
     }
-    Write-Warn "Need Claude Max login..."
-    & claude auth login
+    Write-Warn "Claude OAuth missing or expired - opening login..."
+    Write-Host "  Sign in with your Claude Max account in the browser."
+    & $exe auth login
+    $s2 = & $exe auth status 2>&1 | Out-String
+    if ($s2 -notmatch '"loggedIn"\s*:\s*true') {
+        Write-Fail "Still not logged in after auth login. Re-run: install.ps1 -LoginOnly"
+    }
+    Write-Info "Claude login OK."
 }
 
 function Get-HermesPython {
@@ -715,6 +725,7 @@ if ($RestartAll) {
     Stop-AllHermesGateways
     Stop-Proxy
     Install-ClaudeCli
+    Ensure-Login
     # Always pull + rebuild - stale dist was hiding opus-5 / sonnet-5
     Install-Proxy | Out-Null
     Patch-Hermes

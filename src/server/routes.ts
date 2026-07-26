@@ -246,6 +246,34 @@ async function handleStreamingResponse(
     subprocess.on("result", (result: ClaudeCliResult) => {
       isComplete = true;
       if (!res.writableEnded) {
+        // Auth errors / non-streamed finals often arrive ONLY as result.result
+        // with zero content_delta events — Hermes then shows an empty reply.
+        const finalText = (result.result || "").trim();
+        if (!hasEmittedText && finalText) {
+          const textChunk = {
+            id: `chatcmpl-${requestId}`,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model: lastModel,
+            choices: [
+              {
+                index: 0,
+                delta: {
+                  role: "assistant" as const,
+                  content: finalText,
+                },
+                finish_reason: null,
+              },
+            ],
+          };
+          res.write(`data: ${JSON.stringify(textChunk)}\n\n`);
+          hasEmittedText = true;
+        }
+
+        if (result.is_error) {
+          console.error("[Streaming] Claude CLI error result:", finalText.slice(0, 300));
+        }
+
         const doneChunk = createDoneChunk(requestId, lastModel, cliInput.requestedModel);
         if (result.usage) {
           doneChunk.usage = {
@@ -348,7 +376,26 @@ async function handleNonStreamingResponse(
 
     subprocess.on("close", (code: number | null) => {
       if (finalResult) {
-        res.json(cliResultToOpenai(finalResult, requestId, undefined, cliInput.requestedModel));
+        const text = (finalResult.result || "").trim();
+        const authFail =
+          finalResult.is_error &&
+          /not logged in|oauth|authenticate|auth/i.test(text);
+
+        if (authFail) {
+          res.status(401).json({
+            error: {
+              message:
+                text +
+                " — run: claude auth login   (or install.ps1 -LoginOnly)",
+              type: "authentication_error",
+              code: "claude_auth_required",
+            },
+          });
+        } else {
+          res.json(
+            cliResultToOpenai(finalResult, requestId, undefined, cliInput.requestedModel)
+          );
+        }
       } else if (!res.headersSent) {
         res.status(500).json({
           error: {

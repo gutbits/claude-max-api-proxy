@@ -372,16 +372,54 @@ export async function verifyClaude(): Promise<{
 }
 
 /**
- * Check if Claude CLI is authenticated
- *
- * Claude Code stores credentials in the OS keychain, not a file.
- * We verify authentication by checking if we can call the CLI successfully.
- * If the CLI is installed, it typically has valid credentials from `claude auth login`.
+ * Check if Claude CLI is authenticated (real check — do not stub true).
  */
 export async function verifyAuth(): Promise<{ ok: boolean; error?: string }> {
-  // If Claude CLI is installed and the user has run `claude auth login`,
-  // credentials are stored in the OS keychain and will be used automatically.
-  // We can't easily check the keychain, so we'll just return true if the CLI exists.
-  // Authentication errors will surface when making actual API calls.
-  return { ok: true };
+  return new Promise((resolve) => {
+    const bin = resolveClaudeBin();
+    const proc = spawn(bin, ["auth", "status"], {
+      stdio: "pipe",
+      windowsHide: true,
+      shell: false,
+    });
+    let output = "";
+    let stderr = "";
+
+    proc.stdout?.on("data", (chunk: Buffer) => {
+      output += chunk.toString();
+    });
+    proc.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    proc.on("error", (err) => {
+      resolve({
+        ok: false,
+        error: `Cannot run Claude auth status (${err.message}). Is CLAUDE_BIN set to claude.exe?`,
+      });
+    });
+
+    proc.on("close", () => {
+      const raw = (output || stderr).trim();
+      if (/"loggedIn"\s*:\s*true/.test(raw)) {
+        resolve({ ok: true });
+        return;
+      }
+      if (/"loggedIn"\s*:\s*false/.test(raw)) {
+        resolve({
+          ok: false,
+          error:
+            "Claude CLI is not logged in (OAuth expired or missing). Run: claude auth login",
+        });
+        return;
+      }
+      // Older CLIs may not print JSON — treat unknown as not ok so users re-login
+      resolve({
+        ok: false,
+        error:
+          "Could not verify Claude login. Run: claude auth login\n" +
+          (raw ? raw.slice(0, 300) : "(no auth status output)"),
+      });
+    });
+  });
 }
