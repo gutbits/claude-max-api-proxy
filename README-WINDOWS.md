@@ -24,7 +24,13 @@ powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAl
 $sha=(Invoke-RestMethod https://api.github.com/repos/gutbits/claude-max-api-proxy/commits/main).sha; iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/$sha/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll
 ```
 
-After update the installer must print banner **v1.1.6**, `OK version=1.1.6`, and `claude-opus-5`. Health: `http://127.0.0.1:3456/health` → `"version":"1.1.6"`.
+After update the installer must print banner **v1.1.7**, `OK version=1.1.7`, and `claude-opus-5`. Health: `http://127.0.0.1:3456/health` → `"version":"1.1.7"`.
+
+**Re-auth Claude Max** (expired OAuth / `401 OAuth access token has expired` — forces logout + browser login, then restarts proxy):
+
+```powershell
+$sha=(Invoke-RestMethod https://api.github.com/repos/gutbits/claude-max-api-proxy/commits/main).sha; iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/$sha/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -LoginOnly; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll
+```
 
 Or double-click **`install.bat`** if you already cloned the repo.
 
@@ -43,7 +49,7 @@ Or double-click **`install.bat`** if you already cloned the repo.
 
 ```powershell
 .\install.ps1 -StartOnly   # start proxy (already set up)
-.\install.ps1 -LoginOnly     # re-auth Claude CLI
+.\install.ps1 -LoginOnly     # force logout + Claude Max re-login
 .\install.ps1 -Stop          # stop proxy + gateways
 .\install.ps1 -RestartAll    # kill all, rebuild services, restart
 ```
@@ -58,12 +64,12 @@ Or double-click **`install.bat`** if you already cloned the repo.
 
 Use **dashes** not dots (`4-8` not `4.8`). Also: `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5`, aliases `opus` / `sonnet` / `fable`.
 
-## Opus 5 / crash notes (v1.1.6+)
+## Opus 5 / crash notes (v1.1.7+)
 
 - **Opus 5** needs Claude Code **2.1.219+**. `-RestartAll` force-upgrades the CLI **and always rebuilds** the proxy (stale `dist/` used to hide `claude-opus-5`).
 - **Windows crash (`EINVAL`)**: the proxy must spawn `claude.exe`, not `claude.cmd`. Installer sets `CLAUDE_BIN` to the `.exe` path.
 - **Hermes + ExecutionPolicy**: do not run bare `npm` in PowerShell (resolves to `npm.ps1` and fails). The installer uses `npm.cmd` internally.
-- **Empty Hermes replies**: usually expired Claude OAuth. Proxy now surfaces the error text in streams; re-login with `install.ps1 -LoginOnly` or `claude auth login`.
+- **Empty Hermes replies / 401 OAuth expired**: run the **Re-auth Claude Max** one-liner (`-LoginOnly` now forces logout + login).
 
 ## Requirements
 

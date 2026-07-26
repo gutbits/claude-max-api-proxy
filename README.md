@@ -36,7 +36,13 @@ powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAl
 $sha=(Invoke-RestMethod https://api.github.com/repos/gutbits/claude-max-api-proxy/commits/main).sha; iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/$sha/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll
 ```
 
-After update the installer must print banner **v1.1.6**, `OK version=1.1.6`, and `claude-opus-5`. Health: `http://127.0.0.1:3456/health` → `"version":"1.1.6"`.
+After update the installer must print banner **v1.1.7**, `OK version=1.1.7`, and `claude-opus-5`. Health: `http://127.0.0.1:3456/health` → `"version":"1.1.7"`.
+
+**Re-auth Claude Max** (expired OAuth / `401 OAuth access token has expired` — forces logout + browser login, then restarts proxy):
+
+```powershell
+$sha=(Invoke-RestMethod https://api.github.com/repos/gutbits/claude-max-api-proxy/commits/main).sha; iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/$sha/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -LoginOnly; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll
+```
 
 ## How It Works
 

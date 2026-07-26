@@ -21,12 +21,13 @@ param(
     [switch]$LoginOnly,
     [switch]$StartOnly,
     [switch]$Stop,
-    [switch]$RestartAll
+    [switch]$RestartAll,
+    [switch]$ForceReauth
 )
 
 $ErrorActionPreference = "Continue"
 
-$ScriptVersion = "1.1.6"
+$ScriptVersion = "1.1.7"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
@@ -310,26 +311,36 @@ function Install-Proxy {
 }
 
 function Ensure-Login {
+    param([switch]$Force)
     Refresh-Path
     Set-ClaudeEnv | Out-Null
     $exe = Get-ClaudeExe
     if (-not $exe) {
         Write-Fail "Claude CLI missing - cannot login."
     }
-    $s = & $exe auth status 2>&1 | Out-String
-    if ($s -match '"loggedIn"\s*:\s*true') {
-        Write-Info "Claude logged in."
-        ($s -split "`n") | Where-Object { $_ -match 'email|subscriptionType' } | ForEach-Object { Write-Host ("  " + $_) }
-        return
+
+    if (-not $Force) {
+        $s = & $exe auth status 2>&1 | Out-String
+        if ($s -match '"loggedIn"\s*:\s*true') {
+            Write-Info "Claude logged in."
+            ($s -split "`n") | Where-Object { $_ -match 'email|subscriptionType' } | ForEach-Object { Write-Host ("  " + $_) }
+            return
+        }
     }
-    Write-Warn "Claude OAuth missing or expired - opening login..."
-    Write-Host "  Sign in with your Claude Max account in the browser."
+
+    Write-Warn "Re-authenticating Claude Max (logout + login)..."
+    Write-Host "  A browser window should open - sign in with your Claude Max account."
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try { & $exe auth logout 2>&1 | Out-Host } catch {}
+    $ErrorActionPreference = $prev
     & $exe auth login
     $s2 = & $exe auth status 2>&1 | Out-String
     if ($s2 -notmatch '"loggedIn"\s*:\s*true') {
         Write-Fail "Still not logged in after auth login. Re-run: install.ps1 -LoginOnly"
     }
     Write-Info "Claude login OK."
+    ($s2 -split "`n") | Where-Object { $_ -match 'email|subscriptionType' } | ForEach-Object { Write-Host ("  " + $_) }
 }
 
 function Get-HermesPython {
@@ -719,7 +730,7 @@ Write-Host ""
 Refresh-Path
 
 if ($Stop) { Stop-AllHermesGateways; Stop-Proxy; exit 0 }
-if ($LoginOnly) { Ensure-Login; exit 0 }
+if ($LoginOnly -or $ForceReauth) { Ensure-Login -Force; exit 0 }
 
 if ($RestartAll) {
     Stop-AllHermesGateways
