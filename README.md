@@ -30,13 +30,13 @@ Remove-Item $env:USERPROFILE\install.ps1 -Force -EA 0; iwr "https://raw.githubus
 powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll
 ```
 
-**Update to latest** (pull code, rebuild, upgrade Claude CLI, restart — use this for Opus 5 / bugfixes):
+**Update to latest** (download installer → pull, rebuild, upgrade Claude CLI, restart):
 
 ```powershell
-iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/main/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; $d="$env:USERPROFILE\claude-max-api-proxy"; git -C $d remote set-url origin https://github.com/gutbits/claude-max-api-proxy.git 2>$null; git -C $d fetch origin; git -C $d reset --hard origin/main; npm --prefix $d install --loglevel error; npm --prefix $d run build; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll; (Invoke-RestMethod http://127.0.0.1:3456/v1/models).data.id
+iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/main/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll; (Invoke-RestMethod http://127.0.0.1:3456/v1/models).data.id
 ```
 
-After update you should see `claude-opus-5` in the printed model list. Health: `http://127.0.0.1:3456/health` → `"version":"1.1.1"`.
+After update you should see `claude-opus-5` first. Health: `http://127.0.0.1:3456/health` → `"version":"1.1.2"`.
 
 ## How It Works
 

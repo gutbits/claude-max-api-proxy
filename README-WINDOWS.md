@@ -18,10 +18,10 @@ Remove-Item $env:USERPROFILE\install.ps1 -Force -EA 0; iwr "https://raw.githubus
 powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll
 ```
 
-**Update code + rebuild + restart** (pull latest models, fix gutbits remote):
+**Update code + rebuild + restart** (pull latest, upgrade Claude CLI, rebuild models — do **not** call `npm` in the parent shell; Hermes `npm.ps1` is blocked by ExecutionPolicy):
 
 ```powershell
-iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/main/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; $d="$env:USERPROFILE\claude-max-api-proxy"; git -C $d remote set-url origin https://github.com/gutbits/claude-max-api-proxy.git 2>$null; git -C $d fetch origin; git -C $d reset --hard origin/main; npm --prefix $d install --loglevel error; npm --prefix $d run build; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll; (Invoke-RestMethod http://127.0.0.1:3456/v1/models).data.id
+iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/main/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll; (Invoke-RestMethod http://127.0.0.1:3456/v1/models).data.id
 ```
 
 Or double-click **`install.bat`** if you already cloned the repo.
@@ -56,10 +56,11 @@ Or double-click **`install.bat`** if you already cloned the repo.
 
 Use **dashes** not dots (`4-8` not `4.8`). Also: `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5`, aliases `opus` / `sonnet` / `fable`.
 
-## Opus 5 / crash notes (v1.1.1+)
+## Opus 5 / crash notes (v1.1.2+)
 
 - **Opus 5** needs Claude Code **2.1.219+**. `-RestartAll` force-upgrades the CLI **and always rebuilds** the proxy (stale `dist/` used to hide `claude-opus-5`).
 - **Windows crash (`EINVAL`)**: the proxy must spawn `claude.exe`, not `claude.cmd`. Installer sets `CLAUDE_BIN` to the `.exe` path.
+- **Hermes + ExecutionPolicy**: do not run bare `npm` in PowerShell (resolves to `npm.ps1` and fails). The installer uses `npm.cmd` internally.
 
 ## Requirements
 

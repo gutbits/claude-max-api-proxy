@@ -26,7 +26,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ScriptVersion = "1.1.1"
+$ScriptVersion = "1.1.2"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
@@ -45,6 +45,37 @@ function Refresh-Path {
                 [Environment]::GetEnvironmentVariable("Path", "User")
 }
 
+# Prefer npm.cmd — Hermes puts npm.ps1 first and Restricted policy blocks it
+function Get-NpmCmd {
+    $candidates = @(
+        (Join-Path $env:ProgramFiles "nodejs\npm.cmd"),
+        (Join-Path ${env:ProgramFiles(x86)} "nodejs\npm.cmd"),
+        (Join-Path $env:LOCALAPPDATA "hermes\node\npm.cmd")
+    )
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path -LiteralPath $c)) { return $c }
+    }
+    $found = Get-Command npm.cmd -ErrorAction SilentlyContinue
+    if ($found -and $found.Source) { return $found.Source }
+    Write-Fail "npm.cmd not found. Install Node.js 20+ from https://nodejs.org (Hermes npm.ps1 is blocked by ExecutionPolicy)."
+}
+
+function Invoke-Npm {
+    param([Parameter(Mandatory = $true)][string[]]$NpmArgs)
+    $npm = Get-NpmCmd
+    Write-Info ("Using npm: " + $npm)
+    & $npm @NpmArgs
+    return $LASTEXITCODE
+}
+
+function Stop-PidTree([int]$ProcessId) {
+    if ($ProcessId -le 0) { return }
+    # Avoid ">nul 2>&1" inside install.ps1 — PS 5.1 parses those as script redirections and breaks the file
+    $null = Start-Process -FilePath "taskkill.exe" `
+        -ArgumentList @("/PID", "$ProcessId", "/T", "/F") `
+        -WindowStyle Hidden -Wait -PassThru -ErrorAction SilentlyContinue
+}
+
 function Get-InstallDir {
     if ($env:CLAUDE_MAX_PROXY_DIR) { return $env:CLAUDE_MAX_PROXY_DIR }
     if (Test-Path $InstallMarker) {
@@ -60,9 +91,9 @@ function Get-ClaudeExe {
     $candidates = @()
 
     try {
-        $npmRoot = (& npm root -g 2>$null)
+        $npmRoot = & (Get-NpmCmd) @("root", "-g") 2>$null
         if ($npmRoot) {
-            $npmRoot = $npmRoot.ToString().Trim()
+            $npmRoot = ($npmRoot | Out-String).Trim()
             $candidates += (Join-Path $npmRoot '@anthropic-ai\claude-code\bin\claude.exe')
         }
     }
@@ -143,7 +174,10 @@ function Install-Node {
 function Install-ClaudeCli {
     Refresh-Path
     Write-Info "Ensuring Claude Code CLI is up to date (Opus 5 needs 2.1.219+)..."
-    & npm install -g $ClaudePkg --loglevel error
+    $code = Invoke-Npm -NpmArgs @("install", "-g", $ClaudePkg, "--loglevel", "error")
+    if ($code -ne 0) {
+        Write-Warn ("npm install -g exited with code " + $code)
+    }
     Refresh-Path
     Start-Sleep -Seconds 2
 
@@ -154,9 +188,9 @@ function Install-ClaudeCli {
         if (Test-Path -LiteralPath $hermesClaude) { $exe = $hermesClaude }
     }
     if (-not $exe) {
-        Write-Warn ("npm root -g: " + (npm root -g 2>$null))
+        Write-Warn ("npm root -g: " + ((& (Get-NpmCmd) @("root", "-g")) | Out-String).Trim())
         Write-Warn ("where claude: " + (where.exe claude 2>$null))
-        Write-Fail "Claude CLI install failed. Try manually: npm install -g @anthropic-ai/claude-code@latest"
+        Write-Fail "Claude CLI install failed. Try manually: npm.cmd install -g @anthropic-ai/claude-code@latest"
     }
 
     $env:CLAUDE_BIN = $exe
@@ -171,7 +205,7 @@ function Install-ClaudeCli {
         $maj = [int]$Matches[1]; $min = [int]$Matches[2]; $pat = [int]$Matches[3]
         # Min for Opus 5 / Sonnet 5
         if ($maj -lt 2 -or ($maj -eq 2 -and $min -lt 1) -or ($maj -eq 2 -and $min -eq 1 -and $pat -lt 219)) {
-            Write-Warn "Claude Code is older than 2.1.219 — Opus 5 may fail. Re-run: npm install -g @anthropic-ai/claude-code@latest"
+            Write-Warn "Claude Code is older than 2.1.219 — Opus 5 may fail. Re-run: npm.cmd install -g @anthropic-ai/claude-code@latest"
         }
     }
 }
@@ -201,10 +235,13 @@ function Install-Proxy {
     Save-InstallDir $dir
     Set-Location $dir
     Write-Info "npm install..."
-    & npm install --loglevel error
+    $code = Invoke-Npm -NpmArgs @("install", "--loglevel", "error")
+    if ($code -ne 0) {
+        Write-Fail ("npm install failed (exit " + $code + ")")
+    }
     Write-Info "npm run build (refreshing model catalog)..."
-    & npm run build
-    if ($LASTEXITCODE -ne 0) {
+    $code = Invoke-Npm -NpmArgs @("run", "build")
+    if ($code -ne 0) {
         Write-Fail "npm run build failed — model list will stay stale"
     }
 
@@ -427,8 +464,7 @@ function Stop-Proxy {
     if (Test-Path $PidFile) {
         $p = Get-Content $PidFile -ErrorAction SilentlyContinue
         if ($p) {
-            # /T kills child node when started via cmd wrapper
-            cmd /c "taskkill /PID $p /T /F >nul 2>&1"
+            Stop-PidTree ([int]$p)
         }
         Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
     }
@@ -436,13 +472,13 @@ function Stop-Proxy {
         try {
             $c = (Get-CimInstance Win32_Process -Filter ("ProcessId=" + $_.Id)).CommandLine
             if ($c -match 'standalone\.js|claude-max-api-proxy') {
-                cmd /c "taskkill /PID $($_.Id) /T /F >nul 2>&1"
+                Stop-PidTree ([int]$_.Id)
             }
         }
         catch {}
     }
     Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue |
-        ForEach-Object { cmd /c "taskkill /PID $($_.OwningProcess) /T /F >nul 2>&1" }
+        ForEach-Object { Stop-PidTree ([int]$_.OwningProcess) }
     Start-Sleep -Seconds 1
     $ErrorActionPreference = $prevEap
     Write-Info "Proxy stopped."
@@ -463,13 +499,16 @@ function Start-Proxy {
     Stop-Proxy
 
     $wrapper = Join-Path $env:TEMP "claude-max-run.cmd"
-    $bat = @()
-    $bat += '@echo off'
-    $bat += ('set "CLAUDE_BIN=' + $claude + '"')
-    $bat += ('set "PATH=' + $env:Path + ';' + $NpmGlobal + '"')
-    $bat += ('cd /d "' + $dir + '"')
-    $bat += ('node "dist\server\standalone.js" ' + $Port + ' 1>> "' + $LogFile + '" 2>&1')
-    Set-Content -Path $wrapper -Value ($bat -join "`r`n") -Encoding ASCII
+    # Build bat without PS parsing 2>&1 / quotes from Path
+    $safePath = ($env:Path + ";" + $NpmGlobal) -replace '"', ''
+    $lines = @(
+        "@echo off",
+        ("set `"CLAUDE_BIN=" + $claude + "`""),
+        ("set `"PATH=" + $safePath + "`""),
+        ("cd /d `"$dir`""),
+        ("node `"dist\server\standalone.js`" $Port 1>>`"$LogFile`" 2>&1")
+    )
+    Set-Content -Path $wrapper -Value ($lines -join "`r`n") -Encoding ASCII
 
     Write-Info ("Starting proxy on http://127.0.0.1:" + $Port + " ...")
     Write-Info ("Install dir: " + $dir)
