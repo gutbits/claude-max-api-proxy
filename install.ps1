@@ -26,7 +26,7 @@ param(
 
 $ErrorActionPreference = "Continue"
 
-$ScriptVersion = "1.1.4"
+$ScriptVersion = "1.1.5"
 $RepoUrl       = "https://github.com/gutbits/claude-max-api-proxy.git"
 $DefaultDir    = Join-Path $env:USERPROFILE "claude-max-api-proxy"
 $InstallMarker = Join-Path $env:USERPROFILE ".claude-max-api-proxy.dir"
@@ -60,27 +60,61 @@ function Get-NpmCmd {
     Write-Fail "npm.cmd not found. Install Node.js 20+ from https://nodejs.org (Hermes npm.ps1 is blocked by ExecutionPolicy)."
 }
 
-# Run npm without leaking stdout into the return value (PS would mix it with exit code)
+function Get-GitExe {
+    $found = Get-Command git.exe -ErrorAction SilentlyContinue
+    if ($found -and $found.Source) { return $found.Source }
+    Write-Fail "git.exe not found. Install Git from https://git-scm.com/download/win"
+}
+
+# Run external tools via Start-Process so stdout NEVER mixes into the returned exit code.
+# (PS: $code = fn  where fn prints + returns 0 becomes @("HEAD is now...", 0) and -ne 0 is wrongly true)
+function Invoke-Native {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [string]$WorkingDirectory = ""
+    )
+    $outFile = Join-Path $env:TEMP ("cmx-out-" + [guid]::NewGuid().ToString("n") + ".txt")
+    $errFile = Join-Path $env:TEMP ("cmx-err-" + [guid]::NewGuid().ToString("n") + ".txt")
+    try {
+        $start = @{
+            FilePath               = $FilePath
+            ArgumentList           = $Arguments
+            Wait                   = $true
+            PassThru               = $true
+            NoNewWindow            = $true
+            RedirectStandardOutput = $outFile
+            RedirectStandardError  = $errFile
+        }
+        if ($WorkingDirectory -and (Test-Path -LiteralPath $WorkingDirectory)) {
+            $start["WorkingDirectory"] = $WorkingDirectory
+        }
+        $proc = Start-Process @start
+        if (Test-Path -LiteralPath $outFile) {
+            Get-Content -LiteralPath $outFile -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+        }
+        if (Test-Path -LiteralPath $errFile) {
+            Get-Content -LiteralPath $errFile -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+        }
+        if ($null -eq $proc.ExitCode) { return 0 }
+        return [int]$proc.ExitCode
+    }
+    finally {
+        Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-Npm {
     param([Parameter(Mandatory = $true)][string[]]$NpmArgs)
     $npm = Get-NpmCmd
     Write-Info ("Using npm: " + $npm)
-    & $npm @NpmArgs | Out-Host
-    $code = $LASTEXITCODE
-    if ($null -eq $code) { $code = 0 }
-    return [int]$code
+    return (Invoke-Native -FilePath $npm -Arguments $NpmArgs)
 }
 
-# git writes progress to stderr; under ErrorAction Stop that aborts the installer
 function Invoke-Git {
     param([Parameter(Mandatory = $true)][string[]]$GitArgs)
-    $argLine = ($GitArgs | ForEach-Object {
-        if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ }
-    }) -join ' '
-    cmd.exe /c ("git " + $argLine)
-    $code = $LASTEXITCODE
-    if ($null -eq $code) { $code = 0 }
-    return [int]$code
+    $git = Get-GitExe
+    return (Invoke-Native -FilePath $git -Arguments $GitArgs)
 }
 
 function Stop-PidTree([int]$ProcessId) {
@@ -188,7 +222,7 @@ function Install-Node {
 function Install-ClaudeCli {
     Refresh-Path
     Write-Info "Ensuring Claude Code CLI is up to date (Opus 5 needs 2.1.219+)..."
-    $code = Invoke-Npm -NpmArgs @("install", "-g", $ClaudePkg, "--loglevel", "error")
+    $code = [int](Invoke-Npm -NpmArgs @("install", "-g", $ClaudePkg, "--loglevel", "error"))
     if ($code -ne 0) {
         Write-Warn ("npm install -g exited with code " + $code)
     }
@@ -235,16 +269,16 @@ function Install-Proxy {
         }
         if (-not (Test-Path (Join-Path $dir ".git"))) {
             Write-Info ("Cloning to " + $dir + " ...")
-            $code = Invoke-Git @("clone", $RepoUrl, $dir)
+            $code = [int](Invoke-Git @("clone", $RepoUrl, $dir))
             if ($code -ne 0) { Write-Fail ("git clone failed (exit " + $code + ")") }
         }
     }
     elseif (Test-Path (Join-Path $dir ".git")) {
         Write-Info ("Updating " + $dir + " to latest main...")
-        [void](Invoke-Git @("-C", $dir, "remote", "set-url", "origin", $RepoUrl))
-        $code = Invoke-Git @("-C", $dir, "fetch", "origin")
+        [void]([int](Invoke-Git @("-C", $dir, "remote", "set-url", "origin", $RepoUrl)))
+        $code = [int](Invoke-Git @("-C", $dir, "fetch", "origin"))
         if ($code -ne 0) { Write-Fail ("git fetch failed (exit " + $code + ")") }
-        $code = Invoke-Git @("-C", $dir, "reset", "--hard", "origin/main")
+        $code = [int](Invoke-Git @("-C", $dir, "reset", "--hard", "origin/main"))
         if ($code -ne 0) { Write-Fail ("git reset failed (exit " + $code + ")") }
         Write-Info ("HEAD: " + ((& git -C $dir rev-parse --short HEAD) | Out-String).Trim())
     }
@@ -252,12 +286,12 @@ function Install-Proxy {
     Save-InstallDir $dir
     Set-Location $dir
     Write-Info "npm install..."
-    $code = Invoke-Npm -NpmArgs @("install", "--loglevel", "error")
+    $code = [int](Invoke-Npm -NpmArgs @("install", "--loglevel", "error"))
     if ($code -ne 0) {
         Write-Fail ("npm install failed (exit " + $code + ")")
     }
     Write-Info "npm run build (refreshing model catalog)..."
-    $code = Invoke-Npm -NpmArgs @("run", "build")
+    $code = [int](Invoke-Npm -NpmArgs @("run", "build"))
     if ($code -ne 0) {
         Write-Fail ("npm run build failed (exit " + $code + ")")
     }

@@ -24,7 +24,7 @@ powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAl
 $sha=(Invoke-RestMethod https://api.github.com/repos/gutbits/claude-max-api-proxy/commits/main).sha; iwr "https://raw.githubusercontent.com/gutbits/claude-max-api-proxy/$sha/install.ps1" -OutFile $env:USERPROFILE\install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\install.ps1 -RestartAll
 ```
 
-After update the installer must print banner **v1.1.4**, `OK version=1.1.4`, and `claude-opus-5`. Health: `http://127.0.0.1:3456/health` → `"version":"1.1.4"`.
+After update the installer must print banner **v1.1.5**, `OK version=1.1.5`, and `claude-opus-5`. Health: `http://127.0.0.1:3456/health` → `"version":"1.1.5"`.
 
 Or double-click **`install.bat`** if you already cloned the repo.
 
@@ -58,7 +58,7 @@ Or double-click **`install.bat`** if you already cloned the repo.
 
 Use **dashes** not dots (`4-8` not `4.8`). Also: `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5`, aliases `opus` / `sonnet` / `fable`.
 
-## Opus 5 / crash notes (v1.1.4+)
+## Opus 5 / crash notes (v1.1.5+)
 
 - **Opus 5** needs Claude Code **2.1.219+**. `-RestartAll` force-upgrades the CLI **and always rebuilds** the proxy (stale `dist/` used to hide `claude-opus-5`).
 - **Windows crash (`EINVAL`)**: the proxy must spawn `claude.exe`, not `claude.cmd`. Installer sets `CLAUDE_BIN` to the `.exe` path.
